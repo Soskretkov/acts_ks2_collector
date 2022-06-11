@@ -1,0 +1,240 @@
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::BufReader;
+use calamine::{Reader, Range, DataType, Xlsx, XlsxError};
+
+pub enum Required {
+    Y,
+    N,
+}
+
+pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 8] = [
+    (0, Required::N, "Исполнитель"),
+    (0, Required::Y, "Стройка"),
+    (0, Required::Y, "Объект"),
+    (9, Required::Y, "Договор подряда"),
+    (9, Required::N, "Доп. соглашение"),
+    (5, Required::Y, "Номер документа"),
+    (3, Required::Y, "Наименование работ и затрат"),
+    (3, Required::Y, "Стоимость материальных ресурсов (всего)"),
+];
+
+pub const NAMES_OF_HEADER: [(&'static str, Option<(&'static str, (i8, i8))>); 15] = [
+    ("Исполнитель", None),
+    ("Глава", None),
+    ("Глава наименование", None),
+    ("Объект", Some(("Объект", (0, 3)))),
+    ("Договор №", Some(("Договор подряда", (0, 2)))),
+    ("Договор дата", Some(("Договор подряда", (1, 2)))),
+    ("Смета №", Some(("Договор подряда", (0, -9)))),
+    ("Смета наименование", Some(("Договор подряда", (1, -9)))),
+    ("По смете в ц.2000г.", Some(("Договор подряда", (2, -4)))),
+    (
+        "Выполнение работ в ц.2000г.",
+        Some(("Договор подряда", (3, -4))),
+    ),
+    ("Акт №", Some(("Номер документа", (2, 0)))),
+    ("Акт дата", Some(("Номер документа", (2, 4)))),
+    ("Отчетный период начало", Some(("Номер документа", (2, 5)))),
+    (
+        "Отчетный период окончание",
+        Some(("Номер документа", (2, 6))),
+    ),
+    (
+        "Метод расчета",
+        Some(("Наименование работ и затрат", (-1, -3))),
+    ),
+];
+pub struct Book {
+    pub path: String,
+    pub data: Xlsx<BufReader<File>>,
+}
+
+impl Book {
+    pub fn new(path: &str) -> Result<Self, XlsxError> {
+        let data: Xlsx<_> = calamine::open_workbook(&path)?;
+        Ok(Book {
+            path: path.to_owned(),
+            data,
+        })
+    }
+}
+
+pub struct Sheet {
+    pub path: String,
+    pub sheetname: &'static str,
+    pub data: Range<DataType>,
+    pub search_points: HashMap<&'static str, (usize, usize)>,
+}
+
+impl Sheet {
+    pub fn new<'a>(
+        workbook: &'a mut Book,
+        sheetname: &'static str,
+        search_reference_points: &[(usize, Required, &'static str)],
+        expected_sum_of_requir_col: usize,
+    ) -> Result<Sheet, &'static str> {
+        //) -> Result<Sheet, Box<dyn Error>> {
+        let data = workbook.data.worksheet_range(sheetname).unwrap().unwrap();
+        let mut search_points = HashMap::new();
+
+        let mut temp_sh_iter = data.used_cells();
+        for item in search_reference_points {
+            let temp = temp_sh_iter
+                .find(|x| x.2.get_string().unwrap_or("default") == item.2)
+                .unwrap();
+            search_points.insert(item.2, (temp.0, temp.1));
+        }
+
+        //Ниже значений на удаленность их столбцов чтобы гарантировать что найден нужный лист.
+        let first_col = search_points.get("Стройка").unwrap().1;
+
+        let (just_a_amount_requir_col, just_a_sum_requir_col) =
+            search_reference_points
+                .iter()
+                .fold((0_usize, 0), |acc, item| match item.1 {
+                    Required::Y => (acc.0 + 1, acc.1 + search_points.get(item.2).unwrap().1),
+                    _ => acc,
+                });
+
+        match just_a_sum_requir_col - first_col * just_a_amount_requir_col
+            == expected_sum_of_requir_col
+        {
+            true => {
+                return Ok(Sheet {
+                    path: workbook.path.clone(),
+                    sheetname,
+                    data,
+                    search_points,
+                })
+            }
+            false => return Err("Не найдена шапка КС-2"),
+        }
+    }
+}
+
+#[derive()]
+pub struct Act {
+    pub path: String,
+    pub sheetname: &'static str,
+    pub names_of_header: &'static [(&'static str, Option<(&'static str, (i8, i8))>); 15],
+    pub data_of_header: Vec<Option<DateVariant>>,
+    pub data_of_summary: Vec<TotalsRow>,
+}
+
+impl<'a> Act {
+    pub fn new(sheet: Sheet) -> Act {
+        let header_addresses = Self::cells_addreses_in_header(&sheet.search_points);
+        let data_of_header:Vec<Option<DateVariant>> = header_addresses
+            .iter()
+            .map(|address| {
+                match address {
+                    Some(x) => {
+                        match &sheet.data[*x] {
+                            DataType::DateTime(x) => Some(DateVariant::Float(*x)),
+                            DataType::Float(x) => Some(DateVariant::Float(*x)),
+                            DataType::String(x) => Some(DateVariant::String(x.to_owned())),
+                            _ => None,
+                         }
+                }
+                    None => None,
+                }
+            })
+            .collect();
+
+        let data_of_summary = Self::summary(&sheet);
+
+        Act {
+            path: sheet.path,
+            sheetname: sheet.sheetname,
+            names_of_header: &NAMES_OF_HEADER,
+            data_of_header,
+            data_of_summary,
+        }
+    }
+    fn cells_addreses_in_header(
+        search_points: &HashMap<&'static str, (usize, usize)>,
+    ) -> Vec<Option<(usize, usize)>> {
+        let stroika_adr = search_points.get("Стройка").unwrap(); //unwrap не требует обработки
+        let object_adr = search_points.get("Объект").unwrap(); //unwrap не требует обработки
+        let contrac_adr = search_points.get("Договор подряда").unwrap(); //unwrap не требует обработки
+        let document_number_adr = search_points.get("Номер документа").unwrap(); //unwrap не требует обработки
+        let workname_adr = search_points.get("Наименование работ и затрат").unwrap(); //unwrap не требует обработки
+
+        let temp_vec: Vec<Option<(usize, usize)>> = NAMES_OF_HEADER.iter().fold(Vec::new(), |mut vec, shift| {
+
+                let temp_cells_address: Option<(usize, usize)> = match shift {
+                    (_, Some((point_name, (row, col)))) => {
+                        let temp = match *point_name {
+                            "Объект" => ((object_adr.0 as isize + *row as isize) as usize, (object_adr.1 as isize + *col as isize) as usize),
+                            "Договор подряда" => ((contrac_adr.0 as isize + *row as isize) as usize, (contrac_adr.1 as isize + *col as isize) as usize),
+                            "Номер документа" => ((document_number_adr.0 as isize + *row as isize) as usize, (document_number_adr.1 as isize + *col as isize) as usize),
+                            "Наименование работ и затрат" => ((workname_adr.0 as isize + *row as isize) as usize, (workname_adr.1 as isize + *col as isize) as usize),
+                            _ => unreachable!("Ошибка в логике программы, сообщающая о необходимости исправить код программы: ячейка в Excel с содержимым '{}' будет причиной подобных ошибок, пока не станет типом Required::Y чтобы обрабатываться", point_name),
+                        };
+                        Some(temp)
+                    },
+                    (target_name, _) => match *target_name {
+                        "Исполнитель" => match search_points.get("Исполнитель") {
+                            Some((row, col))=> Some((*row, *col + 3)),
+                            None => None,
+                        },
+                        "Глава" => match stroika_adr.0 + 2 == object_adr.0 {
+                            true => Some((stroika_adr.0 + 1, stroika_adr.1)),
+                            false => None,
+                        }//Адрес возвращается только если между "Стройкой" и "Объектом" одна строка
+                        "Глава наименование" => match stroika_adr.0 + 2 == object_adr.0 {
+                            true => Some((stroika_adr.0 + 1, stroika_adr.1 + 3)),
+                            false => None,
+                        }//Адрес возвращается только если между "Стройкой" и "Объектом" одна строка
+                        _ => None,
+                    },                    
+                };
+
+                vec.push(temp_cells_address);
+                vec
+
+            });
+        temp_vec
+    }
+
+    fn summary(sheet: &Sheet) -> Vec<TotalsRow> { 
+        let (starting_row, starting_col) = *sheet.search_points.get("Стоимость материальных ресурсов (всего)").unwrap(); //unwrap не требует обработки
+        let total_row = sheet.data.get_size().0;
+        let base_col = starting_col + 6;
+        let current_col = starting_col + 9;
+
+        let temp_vec_row: Vec<TotalsRow> = (starting_row..total_row).fold(Vec::new(), |mut acc, row| {
+            let name = &sheet.data[(row, starting_col)];
+            if name.is_string() {
+                let base_price = &sheet.data[(row, base_col)];
+                let current_price = &sheet.data[(row, current_col)];
+                
+                if base_price.is_float() || current_price.is_float() {
+                    let temp_total_row = TotalsRow {
+                        name: name.get_string().unwrap().to_string(),
+                        base_price: base_price.get_float(),
+                        current_price: current_price.get_float(),
+                    };
+                    acc.push(temp_total_row);
+                }
+            }
+            acc
+    });
+    temp_vec_row
+    }
+
+}
+
+#[derive(Debug)]
+pub struct TotalsRow {
+    pub name: String,
+    pub base_price: Option<f64>,
+    pub current_price: Option<f64>,
+}
+
+#[derive(Debug)]
+pub enum DateVariant {
+    String(String),
+    Float(f64),
+}
