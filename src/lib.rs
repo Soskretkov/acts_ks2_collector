@@ -19,6 +19,7 @@ pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 8] = [
     (3, Required::Y, "Стоимость материальных ресурсов (всего)"),
 ];
 
+#[rustfmt::skip]
 pub const NAMES_OF_HEADER: [(&'static str, Option<(&'static str, (i8, i8))>); 15] = [
     ("Исполнитель", None),
     ("Глава", None),
@@ -29,21 +30,12 @@ pub const NAMES_OF_HEADER: [(&'static str, Option<(&'static str, (i8, i8))>); 15
     ("Смета №", Some(("Договор подряда", (0, -9)))),
     ("Смета наименование", Some(("Договор подряда", (1, -9)))),
     ("По смете в ц.2000г.", Some(("Договор подряда", (2, -4)))),
-    (
-        "Выполнение работ в ц.2000г.",
-        Some(("Договор подряда", (3, -4))),
-    ),
+    ("Выполнение работ в ц.2000г.", Some(("Договор подряда", (3, -4)))),
     ("Акт №", Some(("Номер документа", (2, 0)))),
     ("Акт дата", Some(("Номер документа", (2, 4)))),
     ("Отчетный период начало", Some(("Номер документа", (2, 5)))),
-    (
-        "Отчетный период окончание",
-        Some(("Номер документа", (2, 6))),
-    ),
-    (
-        "Метод расчета",
-        Some(("Наименование работ и затрат", (-1, -3))),
-    ),
+    ("Отчетный период окончание", Some(("Номер документа", (2, 6)))),
+    ("Метод расчета", Some(("Наименование работ и затрат", (-1, -3)))),
 ];
 pub struct Book {
     pub path: String,
@@ -113,7 +105,8 @@ impl Sheet {
     }
 }
 
-#[derive()]
+
+#[derive(Debug, Clone)]
 pub struct Act {
     pub path: String,
     pub sheetname: &'static str,
@@ -226,15 +219,16 @@ impl<'a> Act {
 
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TotalsRow {
     pub name: String,
     pub base_price: Option<f64>,
     pub current_price: Option<f64>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DateVariant {
     String(String),
     Float(f64),
 }
+
