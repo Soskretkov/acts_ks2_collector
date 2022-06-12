@@ -108,7 +108,7 @@ fn show_details() {
     println!("------------------------------------------------------------------------------------------------------------\n");
     println!("            Наименование продукта:        «Сборщик данных из актов формы \"КС-2\"»");
     println!("            Наименование на GitHub.com:   «acts_ks2_collector»");
-    println!("            Адрес прокта на GitHub.com:   https://github.com/Soskretkov");
+    println!("            Адрес прокта на GitHub.com:   https://github.com/Soskretkov/acts_ks2_collector");
     println!("            Дата создания:                10.06.2022");
     println!("            Дата последних изменений:     10.06.2022");
     println!("            Автор:                        Оскретков Сергей Юрьевич\n\n");
