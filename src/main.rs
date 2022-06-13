@@ -1,8 +1,8 @@
 // use xlsxwriter::*;
 use acts_ks2_collector::*;
-mod output_data;
+mod load;
 mod ui;
-use crate::output_data::*;
+use crate::load::*;
 
 fn main() {
     let (_path, _sh_name) = ui::session();
@@ -19,7 +19,7 @@ fn main() {
     )
     .unwrap();
 
-    let act = Act::new(sheet);
+    let act = Act::new(sheet).unwrap();
 
     let act1 = act.clone();
     let act2 = act.clone();
@@ -27,7 +27,7 @@ fn main() {
     let vector_of_acts: Vec<Act> = vec![act1, act2, act3];
 
     let (part_2, part_4) =
-        output_data::first_file_summary_lines(&vector_of_acts[0].data_of_summary);
+        load::first_file_summary_lines(&vector_of_acts[0].data_of_totals);
 
     // println!("{}", part_2[1]);
 
@@ -69,7 +69,7 @@ fn main() {
     println!("{}:  {:?}", print.0 .0, print.1);
 
     // Печать итогов
-    let summary = act.data_of_summary;
+    let summary = act.data_of_totals;
     let last_row = summary.iter().last().unwrap();
     println!(
         "\n{}: базовая - {}; текущая - {}",

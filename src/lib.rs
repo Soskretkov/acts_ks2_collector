@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
+use std::collections::BTreeSet;
 use calamine::{Reader, Range, DataType, Xlsx, XlsxError};
 
 pub enum Required {
@@ -112,11 +113,11 @@ pub struct Act {
     pub sheetname: &'static str,
     pub names_of_header: &'static [(&'static str, Option<(&'static str, (i8, i8))>); 15],
     pub data_of_header: Vec<Option<DateVariant>>,
-    pub data_of_summary: Vec<TotalsRow>,
+    pub data_of_totals: Vec<TotalsRow>,
 }
 
 impl<'a> Act {
-    pub fn new(sheet: Sheet) -> Act {
+    pub fn new(sheet: Sheet) -> Result<Act, String> {
         let header_addresses = Self::cells_addreses_in_header(&sheet.search_points);
         let data_of_header:Vec<Option<DateVariant>> = header_addresses
             .iter()
@@ -135,15 +136,15 @@ impl<'a> Act {
             })
             .collect();
 
-        let data_of_summary = Self::summary(&sheet);
+        let data_of_totals = Self::totals(&sheet).unwrap();
 
-        Act {
+        Ok(Act {
             path: sheet.path,
             sheetname: sheet.sheetname,
             names_of_header: &NAMES_OF_HEADER,
             data_of_header,
-            data_of_summary,
-        }
+            data_of_totals,
+        })
     }
     fn cells_addreses_in_header(
         search_points: &HashMap<&'static str, (usize, usize)>,
@@ -191,7 +192,7 @@ impl<'a> Act {
         temp_vec
     }
 
-    fn summary(sheet: &Sheet) -> Vec<TotalsRow> { 
+    fn totals(sheet: &Sheet) -> Result<Vec<TotalsRow>, String> { 
         let (starting_row, starting_col) = *sheet.search_points.get("Стоимость материальных ресурсов (всего)").unwrap(); //unwrap не требует обработки
         let total_row = sheet.data.get_size().0;
         let base_col = starting_col + 6;
@@ -214,10 +215,19 @@ impl<'a> Act {
             }
             acc
     });
-    temp_vec_row
+
+    let test = temp_vec_row.iter().map(|row| &row.name ).collect::<BTreeSet<&String>>();
+    let len_diff = temp_vec_row.len() - test.len();
+    
+    if len_diff == 0 {
+        return Ok(temp_vec_row);
+    }
+    Err(format!("Ошибка повторяющихся строк в итогах акта: {} имеет строки с повторяющимися наименованиями затрат, таких строк {} шт.", sheet.path, len_diff))
     }
 
+
 }
+
 
 #[derive(Debug, Clone)]
 pub struct TotalsRow {
