@@ -1,8 +1,8 @@
 // use xlsxwriter::*;
 use acts_ks2_collector::*;
-
-mod ui;
 mod output_data;
+mod ui;
+use crate::output_data::*;
 
 fn main() {
     let (_path, _sh_name) = ui::session();
@@ -21,17 +21,28 @@ fn main() {
 
     let act = Act::new(sheet);
 
-
-
-
-        
-
     let act1 = act.clone();
     let act2 = act.clone();
     let act3 = act.clone();
-    let _vector_of_acts: Vec<Act> = vec![act1, act2, act3];
+    let vector_of_acts: Vec<Act> = vec![act1, act2, act3];
 
+    let (part_2, part_4) =
+        output_data::first_file_summary_lines(&vector_of_acts[0].data_of_summary);
 
+    // println!("{}", part_2[1]);
+
+    let (x, y) = REPORTING_FORM_PART_1
+        .iter()
+        .fold((Vec::new(), Vec::new()), |mut acc, (_, x)| {
+            if let DataSource::AtBasePrices(x) = x {
+                acc.0.push(*x)
+            };
+
+            if let DataSource::AtCurrentPrices(x) = x {
+                acc.1.push(*x)
+            };
+            acc
+        });
 
 
 
