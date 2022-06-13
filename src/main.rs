@@ -4,7 +4,7 @@ mod load;
 mod transform;
 mod ui;
 use crate::extract::{Book, Sheet, SEARCH_REFERENCE_POINTS};
-use crate::load::{DataSource, REPORTING_FORM_PART_1};
+use crate::load::{DataSource, PART_1_REPORT};
 use crate::transform::Act;
 
 fn main() {
@@ -29,22 +29,10 @@ fn main() {
     let act3 = act.clone();
     let vector_of_acts: Vec<Act> = vec![act1, act2, act3];
 
-    let (part_2, part_4) = load::first_file_summary_lines(&vector_of_acts[0].data_of_totals);
+    let (part_2_fst_fls_base, part_4_fst_fls_curr) = load::first_file_data_names(&vector_of_acts[0].data_of_totals);
 
-    // println!("{}", part_2[1]);
-
-    let (x, y) = REPORTING_FORM_PART_1
-        .iter()
-        .fold((Vec::new(), Vec::new()), |mut acc, (_, x)| {
-            if let DataSource::AtBasePrices(x) = x {
-                acc.0.push(*x)
-            };
-
-            if let DataSource::AtCurrentPrices(x) = x {
-                acc.1.push(*x)
-            };
-            acc
-        });
+    //  println!("{:#?}", part_2_fst_fls_base);
+    //  println!("{:#?}", part_4_fst_fls_curr);
 
     // Печать шапки
     let mut header = act
