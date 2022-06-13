@@ -1,8 +1,11 @@
 // use xlsxwriter::*;
-use acts_ks2_collector::*;
+mod extract;
 mod load;
+mod transform;
 mod ui;
-use crate::load::*;
+use crate::extract::{Book, Sheet, SEARCH_REFERENCE_POINTS};
+use crate::load::{DataSource, REPORTING_FORM_PART_1};
+use crate::transform::Act;
 
 fn main() {
     let (_path, _sh_name) = ui::session();
@@ -26,8 +29,7 @@ fn main() {
     let act3 = act.clone();
     let vector_of_acts: Vec<Act> = vec![act1, act2, act3];
 
-    let (part_2, part_4) =
-        load::first_file_summary_lines(&vector_of_acts[0].data_of_totals);
+    let (part_2, part_4) = load::first_file_summary_lines(&vector_of_acts[0].data_of_totals);
 
     // println!("{}", part_2[1]);
 
@@ -43,18 +45,6 @@ fn main() {
             };
             acc
         });
-
-
-
-
-
-
-
-
-
-
-
-
 
     // Печать шапки
     let mut header = act

@@ -1,5 +1,4 @@
-
-use crate::TotalsRow;
+use crate::transform::TotalsRow;
 
 // Четыре вида данных на выходе: в готовом виде в шапке, в готов виде в итогах акта (2 варанта), и нет готовых и нужно расчитать программой:
 #[derive(PartialEq)]
@@ -49,7 +48,6 @@ pub const REPORTING_FORM_PART_1: [(&'static str, DataSource); 18] = [
 // Придется учесть, что у нас два вида данных в итогах: базовые и текущие цены. Проделаем описанное для каждого вида цены.
 // И конечно, нажно проверять на присутсвие данных в PART_1, что-бы мы не включили в шапку отчета повторяющиеся названия.
 
-
 pub fn first_file_summary_lines(act: &Vec<TotalsRow>) -> (Vec<&String>, Vec<&String>) {
     let (x, y) = REPORTING_FORM_PART_1
         .iter()
@@ -63,7 +61,6 @@ pub fn first_file_summary_lines(act: &Vec<TotalsRow>) -> (Vec<&String>, Vec<&Str
             };
             acc
         });
-
 
     act.into_iter()
         .fold((Vec::new(), Vec::new()), |mut acc, x| {
