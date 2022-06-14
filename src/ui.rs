@@ -4,6 +4,7 @@ use std::time::Duration;
 
 pub fn session() -> (String, String) {
     show_first_lines();
+    show_help();
 
     loop {
         let path = inputting_path();
@@ -15,13 +16,13 @@ pub fn session() -> (String, String) {
         let len_path = path.chars().count();
 
         match path {
-            x if len_path < 6
-                && x.matches(['h', 'e', 'l', 'p', 'р', 'у', 'д', 'з']).count() > 2 =>
-            {
-                show_help();
-                thread::sleep(Duration::from_secs(1));
-                continue;
-            }
+            // x if len_path < 6
+            //     && x.matches(['h', 'e', 'l', 'p', 'р', 'у', 'д', 'з']).count() > 2 =>
+            // {
+            //     show_help();
+            //     thread::sleep(Duration::from_secs(1));
+            //     continue;
+            // }
             x if len_path < 9
                 && x.matches([
                     'd', 'e', 't', 'a', 'i', 'l', 's', 'в', 'у', 'е', 'ф', 'ш', 'д', 'ы',
@@ -46,7 +47,7 @@ fn inputting_path() -> String {
             .read_line(&mut text)
             .expect("Ошибка чтения ввода");
 
-        //filter нужен на случай help в кавычках (@ - на случай русской раскладки)
+        //filter нужен на случай ввода "details"  в кавычках (@ - на случай русской раскладки)
         text = text
             .trim()
             .chars()
@@ -66,6 +67,9 @@ fn inputting_path() -> String {
 
 fn inputting_sheet_name() -> String {
     loop {
+        console::Term::stdout().clear_screen();
+        println!("Cпособ указания имени листа не чувствителен к регистру - нет разницы, вводите ли вы «Лист1» или «лист1»;");
+        thread::sleep(Duration::from_secs(1));
         println!("Введите имя листа:");
         let mut temp_sh_name = String::new();
 
@@ -84,30 +88,25 @@ fn inputting_sheet_name() -> String {
 }
 
 fn show_first_lines() {
-    println!("      \"help\"      получение подробностей о работе с программой.");
-    println!("      \"details\"   получение подробностей о программе.\n");
+    println!("        Введите  \"details\"  для получения подробностей о программе.\n");
 }
+#[rustfmt::skip]
 fn show_help() {
-    print!("{esc}c", esc = 27 as char);
-    // std::process::Command::new("clear").status();
-    // std::process::Command::new("cls").status().unwrap();
-    show_first_lines();
     println!("------------------------------------------------------------------------------------------------------------\n");
     println!("● Используйте CTRL + C, чтобы вставить скопированный путь к папке, из которой необходимо собрать данные;");
-    println!(
-        "● Программа будет собирать данные из файлов в указанной папке и всех вложенных папках;"
-    );
+    println!("● Программа будет собирать данные из файлов в указанной папке и всех вложенных папках;");
     println!("● Собираются только файлы с расширением «.xlsm»;");
-    println!("● Способ указания имени листа не чувствителен к регистру - нет разницы, вводите ли вы «Лист1» или «лист1»;");
     println!("● Полезный совет: переименуйте файл Excel, добавив символ «@», и программа не будет собирать его данные.");
-    println!(
-        "\n------------------------------------------------------------------------------------------------------------\n"
-    );
+    println!("\n------------------------------------------------------------------------------------------------------------\n");
 }
+#[rustfmt::skip]
 fn show_details() {
-    print!("{esc}c", esc = 27 as char);
-    show_first_lines();
-    println!("------------------------------------------------------------------------------------------------------------\n");
+    // Очистка прошлых сообщений
+    console::Term::stdout().clear_screen();
+    println!("\n");
+    show_help();
+
+    //println!("------------------------------------------------------------------------------------------------------------\n");
     println!("            Наименование продукта:        «Сборщик данных из актов формы \"КС-2\"»");
     println!("            Наименование на GitHub.com:   «acts_ks2_collector»");
     println!("            Адрес прокта на GitHub.com:   https://github.com/Soskretkov/acts_ks2_collector");
