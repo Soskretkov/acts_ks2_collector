@@ -23,10 +23,10 @@ pub const PART_1_REPORT: [(Option<&'static str>, DataSource); 18] = [
     (None,                                  DataSource::InTableHeader("Исполнитель")),
     (Some("Глава"),                         DataSource::Calculate),
     (None,                                  DataSource::InTableHeader("Объект")),
-    (None,                                  DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")),
+    (None,                                                          DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")),
     (None,                                  DataSource::InTableHeader("Договор №")),
     (None,                                  DataSource::InTableHeader("Договор дата")),
-    (Some("Прихватизация машин"),                                  DataSource::AtBasePrices("Эксплуатация машин")),
+    (Some("Прихватизация машин"),                                   DataSource::AtBasePrices("Эксплуатация машин")),
     (None,                                  DataSource::InTableHeader("Смета №")),
     (None,                                  DataSource::InTableHeader("Смета наименование")),
     (Some("По смете в ц.2000г."),           DataSource::Calculate),
@@ -52,13 +52,13 @@ pub fn first_file_data_names(act: &Vec<TotalsRow>) -> (Vec<&String>, Vec<&String
     let (already_collected_base, already_collected_curr) =
         PART_1_REPORT
             .iter()
-            .fold((Vec::new(), Vec::new()), |mut acc, (new_name, source)| {
+            .fold((Vec::new(), Vec::new()), |mut acc, (_, source)| {
                 if let DataSource::AtBasePrices(default_name) = source {
-                        acc.0.push(*default_name)
+                    acc.0.push(*default_name)
                 };
 
                 if let DataSource::AtCurrPrices(default_name) = source {
-                        acc.1.push(*default_name) 
+                    acc.1.push(*default_name)
                 };
                 acc
             });

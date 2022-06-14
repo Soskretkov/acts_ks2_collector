@@ -1,7 +1,7 @@
+use console::Term;
 use std::io;
 use std::thread;
 use std::time::Duration;
-use console::Term;
 
 pub fn session() -> (String, String) {
     show_first_lines();

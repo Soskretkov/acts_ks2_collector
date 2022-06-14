@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-use std::collections::BTreeSet;
-use calamine::{DataType, Reader};
 use crate::extract::*;
+use calamine::{DataType, Reader};
+use std::collections::HashMap;
 
 impl Sheet {
     pub fn new<'a>(
@@ -25,13 +24,12 @@ impl Sheet {
         //Ниже значений на удаленность их столбцов чтобы гарантировать что найден нужный лист.
         let first_col = search_points.get("Стройка").unwrap().1;
 
-        let (just_a_amount_requir_col, just_a_sum_requir_col) =
-            search_reference_points
-                .iter()
-                .fold((0_usize, 0), |acc, item| match item.1 {
-                    Required::Y => (acc.0 + 1, acc.1 + search_points.get(item.2).unwrap().1),
-                    _ => acc,
-                });
+        let (just_a_amount_requir_col, just_a_sum_requir_col) = search_reference_points
+            .iter()
+            .fold((0_usize, 0), |acc, item| match item.1 {
+                Required::Y => (acc.0 + 1, acc.1 + search_points.get(item.2).unwrap().1),
+                _ => acc,
+            });
 
         match just_a_sum_requir_col - first_col * just_a_amount_requir_col
             == expected_sum_of_requir_col
@@ -49,7 +47,6 @@ impl Sheet {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct Act {
     pub path: String,
@@ -62,24 +59,20 @@ pub struct Act {
 impl<'a> Act {
     pub fn new(sheet: Sheet) -> Result<Act, String> {
         let header_addresses = Self::cells_addreses_in_header(&sheet.search_points);
-        let data_of_header:Vec<Option<DateVariant>> = header_addresses
+        let data_of_header: Vec<Option<DateVariant>> = header_addresses
             .iter()
-            .map(|address| {
-                match address {
-                    Some(x) => {
-                        match &sheet.data[*x] {
-                            DataType::DateTime(x) => Some(DateVariant::Float(*x)),
-                            DataType::Float(x) => Some(DateVariant::Float(*x)),
-                            DataType::String(x) => Some(DateVariant::String(x.to_owned())),
-                            _ => None,
-                         }
-                }
-                    None => None,
-                }
+            .map(|address| match address {
+                Some(x) => match &sheet.data[*x] {
+                    DataType::DateTime(x) => Some(DateVariant::Float(*x)),
+                    DataType::Float(x) => Some(DateVariant::Float(*x)),
+                    DataType::String(x) => Some(DateVariant::String(x.to_owned())),
+                    _ => None,
+                },
+                None => None,
             })
             .collect();
 
-        let data_of_totals = Self::totals(&sheet).unwrap();
+        let data_of_totals = Self::raw_totals(&sheet).unwrap();
 
         Ok(Act {
             path: sheet.path,
@@ -125,7 +118,7 @@ impl<'a> Act {
                             false => None,
                         }//Адрес возвращается только если между "Стройкой" и "Объектом" одна строка
                         _ => None,
-                    },                    
+                    },
                 };
 
                 vec.push(temp_cells_address);
@@ -135,42 +128,53 @@ impl<'a> Act {
         temp_vec
     }
 
-    fn totals(sheet: &Sheet) -> Result<Vec<TotalsRow>, String> { 
-        let (starting_row, starting_col) = *sheet.search_points.get("Стоимость материальных ресурсов (всего)").unwrap(); //unwrap не требует обработки
+    fn raw_totals(sheet: &Sheet) -> Result<Vec<TotalsRow>, String> {
+        let (starting_row, starting_col) = *sheet
+            .search_points
+            .get("Стоимость материальных ресурсов (всего)")
+            .unwrap(); //unwrap не требует обработки
+
         let total_row = sheet.data.get_size().0;
         let base_col = starting_col + 6;
         let current_col = starting_col + 9;
 
-        let temp_vec_row: Vec<TotalsRow> = (starting_row..total_row).fold(Vec::new(), |mut acc, row| {
-            let name = &sheet.data[(row, starting_col)];
-            if name.is_string() {
-                let base_price = &sheet.data[(row, base_col)];
-                let current_price = &sheet.data[(row, current_col)];
-                
-                if base_price.is_float() || current_price.is_float() {
-                    let temp_total_row = TotalsRow {
-                        name: name.get_string().unwrap().to_string(),
-                        base_price: base_price.get_float(),
-                        current_price: current_price.get_float(),
-                    };
-                    acc.push(temp_total_row);
+        let temp_vec_row = (starting_row..total_row).fold(
+            Vec::new(), |mut acc, row| {
+                let wrapped_row_name = &sheet.data[(row, starting_col)];
+                if wrapped_row_name.is_string() {
+                    let base_price = &sheet.data[(row, base_col)];
+                    let current_price = &sheet.data[(row, current_col)];
+
+                    if base_price.is_float() || current_price.is_float() {
+                        let row_name = wrapped_row_name.get_string().unwrap().to_string(); //unwrap не нужно обрабатывать: выше была проверка name.is_string
+                                                                                           // if true {
+
+                        // if let Some(_) = acc.get(row_name) {
+                        //     row_name =
+                        // }
+
+                        // if !unique.iter().any(|x| x == &row_name) {
+                        //     unique.push(row_name.to_owned());
+                        // }
+
+                        let temp_total_row = TotalsRow {
+                            name: row_name,
+                            base_price: base_price.get_float(),
+                            current_price: current_price.get_float(),
+                        };
+                        acc.push(temp_total_row);
+                    }
                 }
-            }
-            acc
-    });
+                acc
+            },
+        );
 
-    let test = temp_vec_row.iter().map(|row| &row.name ).collect::<BTreeSet<&String>>();
-    let len_diff = temp_vec_row.len() - test.len();
-    
-    if len_diff == 0 {
         return Ok(temp_vec_row);
-    }
-    Err(format!("Ошибка повторяющихся строк в итогах акта: {} имеет строки с повторяющимися наименованиями затрат, таких строк {} шт.", sheet.path, len_diff))
+        // Err(format!("Ошибка повторяющихся строк в итогах акта: {} имеет строки с повторяющимися наименованиями затрат, таких строк {} шт.", sheet.path, len_diff))
     }
 
-
+    fn renaming_totals() {}
 }
-
 
 #[derive(Debug, Clone)]
 pub struct TotalsRow {
