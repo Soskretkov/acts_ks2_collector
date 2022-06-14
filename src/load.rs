@@ -15,7 +15,7 @@ pub enum DataSource {
 // Таким образом у нас данные условно делятся на ожидаемые (им порядок можно сразу задать) и случайные
 
 // Нам нужна структура, содержащая информацию о колонках, которые мы ожидаем получить из актов, и здесь мы будем задавать порядок, который сообщит нам пользователь.
-// Мы можем составить представление о начале заголовка выходной формы, читая кортеж схематично: ("нужно переименовать?", "Где искать?"):
+// Мы можем составить представление о начале заголовка выходной формы, читая кортеж схематично: ("Нужно переименовать?", "Где искать?"):
 // Позиция кортежа в массиве будет соответсвовать столбцу выходной формы (и это самые крайние левые столбцы шапки):
 
 #[rustfmt::skip]
@@ -26,7 +26,7 @@ pub const PART_1_REPORT: [(Option<&'static str>, DataSource); 18] = [
     (None,                                  DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")),
     (None,                                  DataSource::InTableHeader("Договор №")),
     (None,                                  DataSource::InTableHeader("Договор дата")),
-    (None,                                  DataSource::AtBasePrices("Эксплуатация машин")),
+    (Some("Прихватизация машин"),                                  DataSource::AtBasePrices("Эксплуатация машин")),
     (None,                                  DataSource::InTableHeader("Смета №")),
     (None,                                  DataSource::InTableHeader("Смета наименование")),
     (Some("По смете в ц.2000г."),           DataSource::Calculate),
@@ -54,17 +54,11 @@ pub fn first_file_data_names(act: &Vec<TotalsRow>) -> (Vec<&String>, Vec<&String
             .iter()
             .fold((Vec::new(), Vec::new()), |mut acc, (new_name, source)| {
                 if let DataSource::AtBasePrices(default_name) = source {
-                    match new_name {
-                        Some(new_name) => acc.0.push(*new_name),
-                        None => acc.0.push(default_name),
-                    }
+                        acc.0.push(*default_name)
                 };
 
                 if let DataSource::AtCurrPrices(default_name) = source {
-                    match new_name {
-                        Some(new_name) => acc.1.push(*new_name),
-                        None => acc.1.push(*default_name), 
-                    }
+                        acc.1.push(*default_name) 
                 };
                 acc
             });
