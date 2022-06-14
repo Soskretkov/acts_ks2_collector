@@ -15,29 +15,29 @@ pub enum DataSource {
 // Таким образом у нас данные условно делятся на ожидаемые (им порядок можно сразу задать) и случайные
 
 // Нам нужна структура, содержащая информацию о колонках, которые мы ожидаем получить из актов, и здесь мы будем задавать порядок, который сообщит нам пользователь.
-// Мы можем составить представление о начале заголовка выходной формы, читая кортеж схематично: ("Как назвать?", "Где искать?"):
+// Мы можем составить представление о начале заголовка выходной формы, читая кортеж схематично: ("нужно переименовать?", "Где искать?"):
 // Позиция кортежа в массиве будет соответсвовать столбцу выходной формы (и это самые крайние левые столбцы шапки):
 
 #[rustfmt::skip]
-pub const PART_1_REPORT: [(&'static str, DataSource); 18] = [
-    ("Исполнитель", DataSource::InTableHeader("Исполнитель")),
-    ("Глава", DataSource::Calculate),
-    ("Объект", DataSource::InTableHeader("Объект")),
-    ("Стоимость материальных ресурсов (всего) ТЦ", DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")),
-    ("Договор №", DataSource::InTableHeader("Договор №")),
-    ("Договор дата", DataSource::InTableHeader("Договор дата")),
-    ("Эксплуатация машин БЦ", DataSource::AtBasePrices("Эксплуатация машин")),
-    ("Смета №", DataSource::InTableHeader("Смета №")),
-    ("Смета наименование", DataSource::InTableHeader("Смета наименование")),
-    ("По смете в ц.2000г.", DataSource::Calculate),
-    ("Выполнение работ в ц.2000г.", DataSource::Calculate),
-    ("Акт №", DataSource::InTableHeader("Акт №")),
-    ("Акт дата", DataSource::Calculate),
-    ("Отчетный период начало", DataSource::Calculate),
-    ("Отчетный период окончание", DataSource::Calculate),
-    ("Метод расчета", DataSource::InTableHeader("Метод расчета")),
-    ("Ссылка на папку", DataSource::Calculate),
-    ("Ссылка на файл", DataSource::Calculate),
+pub const PART_1_REPORT: [(Option<&'static str>, DataSource); 18] = [
+    (None,                                  DataSource::InTableHeader("Исполнитель")),
+    (Some("Глава"),                         DataSource::Calculate),
+    (None,                                  DataSource::InTableHeader("Объект")),
+    (None,                                  DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")),
+    (None,                                  DataSource::InTableHeader("Договор №")),
+    (None,                                  DataSource::InTableHeader("Договор дата")),
+    (None,                                  DataSource::AtBasePrices("Эксплуатация машин")),
+    (None,                                  DataSource::InTableHeader("Смета №")),
+    (None,                                  DataSource::InTableHeader("Смета наименование")),
+    (Some("По смете в ц.2000г."),           DataSource::Calculate),
+    (Some("Выполнение работ в ц.2000г."),   DataSource::Calculate),
+    (None,                                  DataSource::InTableHeader("Акт №")),
+    (Some("Акт дата"),                      DataSource::Calculate),
+    (Some("Отчетный период начало"),        DataSource::Calculate),
+    (Some("Отчетный период окончание"),     DataSource::Calculate),
+    (None,                                  DataSource::InTableHeader("Метод расчета")),
+    (Some("Ссылка на папку"),               DataSource::Calculate),
+    (Some("Ссылка на файл"),                DataSource::Calculate),
 ];
 
 // В массиве выше перечислены далеко не все столбцы что будут в акте (там может быть все что угодно и в неизвестном количестве).
@@ -48,38 +48,43 @@ pub const PART_1_REPORT: [(&'static str, DataSource); 18] = [
 // Придется учесть, что у нас два вида данных в итогах: базовые и текущие цены. Проделаем описанное для каждого вида цены.
 // И конечно, каждая новая PART_N должна исключать данные, присутствующие в предшествующих ей частях
 
-
 pub fn first_file_data_names(act: &Vec<TotalsRow>) -> (Vec<&String>, Vec<&String>) {
     let (already_collected_base, already_collected_curr) =
         PART_1_REPORT
             .iter()
-            .fold((Vec::new(), Vec::new()), |mut acc, (_, x)| {
-                if let DataSource::AtBasePrices(x) = x {
-                    acc.0.push(*x)
+            .fold((Vec::new(), Vec::new()), |mut acc, (new_name, source)| {
+                if let DataSource::AtBasePrices(default_name) = source {
+                    match new_name {
+                        Some(new_name) => acc.0.push(*new_name),
+                        None => acc.0.push(default_name),
+                    }
                 };
 
-                if let DataSource::AtCurrPrices(x) = x {
-                    acc.1.push(*x)
+                if let DataSource::AtCurrPrices(default_name) = source {
+                    match new_name {
+                        Some(new_name) => acc.1.push(*new_name),
+                        None => acc.1.push(*default_name), 
+                    }
                 };
                 acc
             });
 
-    let (fst_fls_base, fst_fls_curr) = act.into_iter()
-        .fold((Vec::new(), Vec::new()), |mut acc, x| {
-
-            if let Some(_) = x.base_price {
-                if !already_collected_base.iter().any(|item| item == &x.name) {                
-                    acc.0.push(&x.name)
+    let (fst_fls_base, fst_fls_curr) =
+        act.into_iter()
+            .fold((Vec::new(), Vec::new()), |mut acc, x| {
+                if let Some(_) = x.base_price {
+                    if !already_collected_base.iter().any(|item| item == &x.name) {
+                        acc.0.push(&x.name)
+                    }
                 }
-            }
 
-            if let Some(_) = x.current_price {
-                if !already_collected_curr.iter().any(|item| item == &x.name) {                
-                    acc.1.push(&x.name)
+                if let Some(_) = x.current_price {
+                    if !already_collected_curr.iter().any(|item| item == &x.name) {
+                        acc.1.push(&x.name)
+                    }
                 }
-            }
-            acc
-        });
+                acc
+            });
 
-        (fst_fls_base, fst_fls_curr)
+    (fst_fls_base, fst_fls_curr)
 }
