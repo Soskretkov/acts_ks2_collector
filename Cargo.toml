@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 calamine = "0.18.0"
 xlsxwriter = "0.3.5"
-console = "0.14.0"
+console = "0.15.0"

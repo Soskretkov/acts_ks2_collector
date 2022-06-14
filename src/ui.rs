@@ -1,6 +1,7 @@
 use std::io;
 use std::thread;
 use std::time::Duration;
+use console::Term;
 
 pub fn session() -> (String, String) {
     show_first_lines();
@@ -67,7 +68,7 @@ fn inputting_path() -> String {
 
 fn inputting_sheet_name() -> String {
     loop {
-        console::Term::stdout().clear_screen();
+        Term::stdout().clear_screen();
         println!("Cпособ указания имени листа не чувствителен к регистру - нет разницы, вводите ли вы «Лист1» или «лист1»;");
         thread::sleep(Duration::from_secs(1));
         println!("Введите имя листа:");
@@ -102,7 +103,7 @@ fn show_help() {
 #[rustfmt::skip]
 fn show_details() {
     // Очистка прошлых сообщений
-    console::Term::stdout().clear_screen();
+    Term::stdout().clear_screen();
     println!("\n");
     show_help();
 
