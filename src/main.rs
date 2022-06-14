@@ -18,7 +18,7 @@ fn main() {
         &mut wb,
         "Лист1",
         &SEARCH_REFERENCE_POINTS,
-        0 + 0 + 3 + 5 + 9 + 3,
+        20, //Это сумма номеров столбцов Y-типа в SEARCH_REFERENCE_POINTS 0 + 0 + 3 + 5 + 9 + 3. Требуется для проверки
     )
     .unwrap();
 
@@ -32,8 +32,8 @@ fn main() {
     let (_part_2_fst_fls_base, _part_4_fst_fls_curr) =
         load::first_file_data_names(&vector_of_acts[0].data_of_totals);
 
-    //  println!("{:#?}", part_2_fst_fls_base);
-    //  println!("{:#?}", part_4_fst_fls_curr);
+      println!("{:#?}", _part_2_fst_fls_base);
+      println!("{:#?}", _part_4_fst_fls_curr);
 
     // Печать шапки
     let mut header = act

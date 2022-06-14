@@ -35,14 +35,14 @@ impl Sheet {
             == expected_sum_of_requir_col
         {
             true => {
-                return Ok(Sheet {
+                Ok(Sheet {
                     path: workbook.path.clone(),
                     sheetname,
                     data,
                     search_points,
                 })
             }
-            false => return Err("Не найдена шапка КС-2"),
+            false => Err("Не найдена шапка КС-2"),
         }
     }
 }
@@ -72,7 +72,8 @@ impl<'a> Act {
             })
             .collect();
 
-        let data_of_totals = Self::raw_totals(&sheet).unwrap();
+        let mut data_of_totals = Self::raw_totals(&sheet).unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
+        Self::renaming_totals(&mut data_of_totals);
 
         Ok(Act {
             path: sheet.path,
@@ -105,10 +106,7 @@ impl<'a> Act {
                         Some(temp)
                     },
                     (target_name, _) => match *target_name {
-                        "Исполнитель" => match search_points.get("Исполнитель") {
-                            Some((row, col))=> Some((*row, *col + 3)),
-                            None => None,
-                        },
+                        "Исполнитель" => search_points.get("Исполнитель").map(|(row, col)| (*row, *col + 3)),
                         "Глава" => match stroika_adr.0 + 2 == object_adr.0 {
                             true => Some((stroika_adr.0 + 1, stroika_adr.1)),
                             false => None,
@@ -138,42 +136,44 @@ impl<'a> Act {
         let base_col = starting_col + 6;
         let current_col = starting_col + 9;
 
-        let temp_vec_row = (starting_row..total_row).fold(
-            Vec::new(), |mut acc, row| {
-                let wrapped_row_name = &sheet.data[(row, starting_col)];
-                if wrapped_row_name.is_string() {
-                    let base_price = &sheet.data[(row, base_col)];
-                    let current_price = &sheet.data[(row, current_col)];
+        let temp_vec_row = (starting_row..total_row).fold(Vec::new(), |mut acc, row| {
+            let wrapped_row_name = &sheet.data[(row, starting_col)];
+            if wrapped_row_name.is_string() {
+                let base_price = &sheet.data[(row, base_col)];
+                let current_price = &sheet.data[(row, current_col)];
 
-                    if base_price.is_float() || current_price.is_float() {
-                        let row_name = wrapped_row_name.get_string().unwrap().to_string(); //unwrap не нужно обрабатывать: выше была проверка name.is_string
-                                                                                           // if true {
+                if base_price.is_float() || current_price.is_float() {
+                    let row_name = wrapped_row_name.get_string().unwrap().to_string(); //unwrap не нужно обрабатывать: выше была проверка name.is_string
+                                                                                       // if true {
 
-                        // if let Some(_) = acc.get(row_name) {
-                        //     row_name =
-                        // }
-
-                        // if !unique.iter().any(|x| x == &row_name) {
-                        //     unique.push(row_name.to_owned());
-                        // }
-
-                        let temp_total_row = TotalsRow {
-                            name: row_name,
-                            base_price: base_price.get_float(),
-                            current_price: current_price.get_float(),
-                        };
-                        acc.push(temp_total_row);
-                    }
+                    let temp_total_row = TotalsRow {
+                        name: row_name,
+                        base_price: base_price.get_float(),
+                        current_price: current_price.get_float(),
+                    };
+                    acc.push(temp_total_row);
                 }
-                acc
-            },
-        );
+            }
+            acc
+        });
 
-        return Ok(temp_vec_row);
+        Ok(temp_vec_row)
         // Err(format!("Ошибка повторяющихся строк в итогах акта: {} имеет строки с повторяющимися наименованиями затрат, таких строк {} шт.", sheet.path, len_diff))
     }
 
-    fn renaming_totals() {}
+    fn renaming_totals(vec: &mut [TotalsRow]) {
+        vec.iter_mut().fold(Vec::<&String>::new(), |mut uniq, row| {
+            let mut new_name = row.name.clone();
+            let mut counter = 1;
+            while uniq.iter().any(|x| **x == new_name) {
+                new_name = format!("{}, {}_{}", row.name, "duplicate", counter);
+                counter += 1;
+            }
+            row.name = new_name;
+            uniq.push(&row.name);
+            uniq
+        });
+    }
 }
 
 #[derive(Debug, Clone)]
