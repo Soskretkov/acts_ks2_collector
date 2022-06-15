@@ -160,6 +160,54 @@ impl<'a> Act {
         // Err(format!("Ошибка повторяющихся строк в итогах акта: {} имеет строки с повторяющимися наименованиями затрат, таких строк {} шт.", sheet.path, len_diff))
     }
 
+    fn _raw_totals_2(sheet: &Sheet) -> Result<Vec<TotalsRow_2>, String> {
+        let (starting_row, starting_col) = *sheet
+            .search_points
+            .get("Стоимость материальных ресурсов (всего)")
+            .unwrap(); //unwrap не требует обработки
+
+        let total_row = sheet.data.get_size().0;
+        let base_col = starting_col + 6;
+        let current_col = starting_col + 9;
+
+        let temp_vec_row =
+            (starting_row..total_row).fold(Vec::<TotalsRow_2>::new(), |mut acc, row| {
+                let wrapped_row_name = &sheet.data[(row, starting_col)];
+                if wrapped_row_name.is_string() {
+                    let base_price = &sheet.data[(row, base_col)];
+                    let current_price = &sheet.data[(row, current_col)];
+
+                    if base_price.is_float() || current_price.is_float() {
+                        let row_name = wrapped_row_name.get_string().unwrap().to_string(); //unwrap не нужно обрабатывать: выше была проверка name.is_string
+
+                        // Выше не лезем
+
+                        match acc.iter_mut().find(|object| object.name == row_name) {
+                            Some(x) => {
+                                x.base_price.push(base_price.get_float());
+                                x.current_price.push(current_price.get_float());
+                                x.row_number.push(row);
+                            }
+                            None => {
+                                let temp_total_row = TotalsRow_2 {
+                                    name: row_name,
+                                    base_price: vec![base_price.get_float()],
+                                    current_price: vec![current_price.get_float()],
+                                    row_number: vec![row],
+                                };
+                                acc.push(temp_total_row);
+                            }
+                        }
+
+                        // Ниже не меняем
+                    }
+                }
+                acc
+            });
+
+        Ok(temp_vec_row)
+        // Err(format!("Ошибка повторяющихся строк в итогах акта: {} имеет строки с повторяющимися наименованиями затрат, таких строк {} шт.", sheet.path, len_diff))
+    }
     fn mark_duplicates(vec: &mut [TotalsRow]) {
         let mut map = HashMap::new();
 
@@ -180,6 +228,13 @@ pub struct TotalsRow {
     pub base_price: Option<f64>,
     pub current_price: Option<f64>,
     pub duplicate_number: Option<u8>,
+}
+#[derive(Debug, Clone)]
+pub struct TotalsRow_2 {
+    pub name: String,
+    pub base_price: Vec<Option<f64>>,
+    pub current_price: Vec<Option<f64>>,
+    pub row_number: Vec<usize>,
 }
 
 #[derive(Debug, Clone)]
