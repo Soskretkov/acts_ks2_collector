@@ -65,16 +65,13 @@ pub fn first_file_data_names(act: &[TotalsRow]) -> (Vec<&String>, Vec<&String>) 
     let (fst_fls_base, fst_fls_curr) =
         act.iter()
             .fold((Vec::new(), Vec::new()), |mut acc, x| {
-                if x.base_price.is_some() {
-                    if x.duplicate_number.is_some() || !already_collected_base.iter().any(|item| item == &x.name) {
+                if x.base_price.is_some() && !already_collected_base.iter().any(|item| item == &x.name) {
                         acc.0.push(&x.name)
-                    }
                 }
-                
-                if x.current_price.is_some() {
-                    if x.duplicate_number.is_some() || !already_collected_curr.iter().any(|item| item == &x.name) {
+                                
+                if x.current_price.is_some() && !already_collected_curr.iter().any(|item| item == &x.name) {
                         acc.1.push(&x.name)                        
-                    }
+                    
                 }
                 
                 acc
