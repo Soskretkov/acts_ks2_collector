@@ -34,14 +34,12 @@ impl Sheet {
         match just_a_sum_requir_col - first_col * just_a_amount_requir_col
             == expected_sum_of_requir_col
         {
-            true => {
-                Ok(Sheet {
-                    path: workbook.path.clone(),
-                    sheetname,
-                    data,
-                    search_points,
-                })
-            }
+            true => Ok(Sheet {
+                path: workbook.path.clone(),
+                sheetname,
+                data,
+                search_points,
+            }),
             false => Err("Не найдена шапка КС-2"),
         }
     }
@@ -73,7 +71,7 @@ impl<'a> Act {
             .collect();
 
         let mut data_of_totals = Self::raw_totals(&sheet).unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
-        Self::renaming_totals(&mut data_of_totals);
+        Self::mark_duplicates(&mut data_of_totals);
 
         Ok(Act {
             path: sheet.path,
@@ -150,6 +148,7 @@ impl<'a> Act {
                         name: row_name,
                         base_price: base_price.get_float(),
                         current_price: current_price.get_float(),
+                        duplicate_number: None,
                     };
                     acc.push(temp_total_row);
                 }
@@ -161,17 +160,16 @@ impl<'a> Act {
         // Err(format!("Ошибка повторяющихся строк в итогах акта: {} имеет строки с повторяющимися наименованиями затрат, таких строк {} шт.", sheet.path, len_diff))
     }
 
-    fn renaming_totals(vec: &mut [TotalsRow]) {
-        vec.iter_mut().fold(Vec::<&String>::new(), |mut uniq, row| {
-            let mut new_name = row.name.clone();
-            let mut counter = 1;
-            while uniq.iter().any(|x| **x == new_name) {
-                new_name = format!("{}, {}_{}", row.name, "duplicate", counter);
-                counter += 1;
+    fn mark_duplicates(vec: &mut [TotalsRow]) {
+        let mut map = HashMap::new();
+
+        vec.iter_mut().for_each(|row| {
+            let count = map.entry(&row.name).or_insert(0_u8);
+            *count += 1;
+
+            if *count > 1 {
+                row.duplicate_number = Some(*count - 1);
             }
-            row.name = new_name;
-            uniq.push(&row.name);
-            uniq
         });
     }
 }
@@ -181,6 +179,7 @@ pub struct TotalsRow {
     pub name: String,
     pub base_price: Option<f64>,
     pub current_price: Option<f64>,
+    pub duplicate_number: Option<u8>,
 }
 
 #[derive(Debug, Clone)]
