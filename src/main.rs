@@ -46,10 +46,10 @@ fn main() {
         }));
 
     // for print in header {
-    //     println!("{}:  {:?}", print.0 .0, print.1);
+    //      println!("{}:  {:?}", print.0.content, print.1);
     // }
     let print = header.nth(2).unwrap();
-    println!("{}:  {:?}", print.0 .0, print.1);
+    println!("{}:  {:?}", print.0.name, print.1);
 
     // Печать итогов
     let summary = act.data_of_totals;
@@ -61,20 +61,21 @@ fn main() {
         last_row.current_price[0].unwrap_or(0.)
     );
 
-    //Печать rows Excel
+    // Печать rows Excel
     // let sheet = Sheet::new(
     //     &mut wb,
     //     "Лист1",
     //     &SEARCH_REFERENCE_POINTS,
-    //     0 + 0 + 3 + 5 + 9 + 3,
+    //     0 + 0 + 3 + 5 + 9 + 9 + 3,
     // )
     // .unwrap();
 
     // let start_of_range = sheet.search_points
-    //     .get("Стоимость материальных ресурсов (всего)")
-    //     .unwrap(); //unwrap не требует обработки
+    //     .get("стоимость материальных ресурсов (всего)")
+    //     .unwrap(); 
     // for row in sheet.data.rows().skip(start_of_range.0) {
     //     println!("{:?}", row);
+    // }
 
     // // Пробная запись
     // let wb = Workbook::new("Test.xlsx");

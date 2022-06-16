@@ -21,23 +21,28 @@ pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 8] = [
     (3, Required::Y, "стоимость материальных ресурсов (всего)"),
 ];
 
+#[derive(Debug, Clone)]
+pub struct DesiredData {
+    pub name: &'static str,
+    pub offset: Option<(&'static str, (i8, i8))>,
+}
 #[rustfmt::skip]
-pub const NAMES_OF_HEADER: [(&str, Option<(&'static str, (i8, i8))>); 15] = [
-    ("Исполнитель",                 None),
-    ("Глава",                       None),
-    ("Глава наименование",          None),
-    ("Объект",                      Some(("объект",                         (0, 3)))),
-    ("Договор №",                   Some(("договор подряда",                (0, 2)))),
-    ("Договор дата",                Some(("договор подряда",                (1, 2)))),
-    ("Смета №",                     Some(("договор подряда",                (0, -9)))),
-    ("Смета наименование",          Some(("договор подряда",                (1, -9)))),
-    ("По смете в ц.2000г.",         Some(("доп. соглашение",                (0, -4)))),
-    ("Выполнение работ в ц.2000г.", Some(("доп. соглашение",                (1, -4)))),
-    ("Акт №",                       Some(("номер документа",                (2, 0)))),
-    ("Акт дата",                    Some(("номер документа",                (2, 4)))),
-    ("Отчетный период начало",      Some(("номер документа",                (2, 5)))),
-    ("Отчетный период окончание",   Some(("номер документа",                (2, 6)))),
-    ("Метод расчета",               Some(("наименование работ и затрат",    (-1, -3)))),
+pub const DESIRED_DATA_ARRAY: [DesiredData; 15] = [
+    DesiredData{name:"Исполнитель",                  offset: None},
+    DesiredData{name:"Глава",                        offset: None},
+    DesiredData{name:"Глава наименование",           offset: None},
+    DesiredData{name:"Объект",                       offset: Some(("объект",                         (0, 3)))},
+    DesiredData{name:"Договор №",                    offset: Some(("договор подряда",                (0, 2)))},
+    DesiredData{name:"Договор дата",                 offset: Some(("договор подряда",                (1, 2)))},
+    DesiredData{name:"Смета №",                      offset: Some(("договор подряда",                (0, -9)))},
+    DesiredData{name:"Смета наименование",           offset: Some(("договор подряда",                (1, -9)))},
+    DesiredData{name:"По смете в ц.2000г.",          offset: Some(("доп. соглашение",                (0, -4)))},
+    DesiredData{name:"Выполнение работ в ц.2000г.",  offset: Some(("доп. соглашение",                (1, -4)))},
+    DesiredData{name:"Акт №",                        offset: Some(("номер документа",                (2, 0)))},
+    DesiredData{name:"Акт дата",                     offset: Some(("номер документа",                (2, 4)))},
+    DesiredData{name:"Отчетный период начало",       offset: Some(("номер документа",                (2, 5)))},
+    DesiredData{name:"Отчетный период окончание",    offset: Some(("номер документа",                (2, 6)))},
+    DesiredData{name:"Метод расчета",                offset: Some(("наименование работ и затрат",    (-1, -3)))},
 ];
 pub struct Book {
     pub path: String,

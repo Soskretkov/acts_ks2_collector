@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub struct Act {
     pub path: String,
     pub sheetname: &'static str,
-    pub names_of_header: &'static [(&'static str, Option<(&'static str, (i8, i8))>); 15],
+    pub names_of_header: &'static [DesiredData; 15],
     pub data_of_header: Vec<Option<DateVariant>>,
     pub data_of_totals: Vec<TotalsRow>,
 }
@@ -32,7 +32,7 @@ impl<'a> Act {
         Ok(Act {
             path: sheet.path,
             sheetname: sheet.sheetname,
-            names_of_header: &NAMES_OF_HEADER,
+            names_of_header: &DESIRED_DATA_ARRAY,
             data_of_header,
             data_of_totals,
         })
@@ -47,10 +47,11 @@ impl<'a> Act {
         let document_number_adr = search_points.get("номер документа").unwrap(); //unwrap не требует обработки
         let workname_adr = search_points.get("наименование работ и затрат").unwrap(); //unwrap не требует обработки
 
-        let temp_vec: Vec<Option<(usize, usize)>> = NAMES_OF_HEADER.iter().fold(Vec::new(), |mut vec, shift| {
+        let temp_vec: Vec<Option<(usize, usize)>> = DESIRED_DATA_ARRAY.iter().fold(Vec::new(), |mut vec, shift| {
 
                 let temp_cells_address: Option<(usize, usize)> = match shift {
-                    (_, Some((point_name, (row, col)))) => {
+                    // (_, Some((point_name, (row, col)))) => {
+                    DesiredData{name: _, offset: Some((point_name, (row, col)))} => {
                         let temp = match *point_name {
                             "объект" => ((object_adr.0 as isize + *row as isize) as usize, (object_adr.1 as isize + *col as isize) as usize),
                             "договор подряда" => ((contrac_adr.0 as isize + *row as isize) as usize, (contrac_adr.1 as isize + *col as isize) as usize),
@@ -61,7 +62,7 @@ impl<'a> Act {
                         };
                         Some(temp)
                     },
-                    (target_name, _) => match *target_name {
+                    DesiredData{name: content, ..} => match *content {
                         "Исполнитель" => search_points.get("исполнитель").map(|(row, col)| (*row, *col + 3)),
                         "Глава" => match stroika_adr.0 + 2 == object_adr.0 {
                             true => Some((stroika_adr.0 + 1, stroika_adr.1)),
