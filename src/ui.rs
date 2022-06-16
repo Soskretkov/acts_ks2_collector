@@ -68,7 +68,7 @@ fn inputting_path() -> String {
 
 fn inputting_sheet_name() -> String {
     loop {
-        Term::stdout().clear_screen();
+        let _ = Term::stdout().clear_screen();
         println!("Нет разницы, вводите ли вы «Лист1» или «лист1» - способ указания листа не чувствителен к регистру.");
         thread::sleep(Duration::from_secs(1));
         println!("Введите имя листа:");
@@ -103,7 +103,7 @@ fn show_help() {
 #[rustfmt::skip]
 fn show_details() {
     // Очистка прошлых сообщений
-    Term::stdout().clear_screen();
+    let _ = Term::stdout().clear_screen();
     println!("\n");
     show_help();
 
