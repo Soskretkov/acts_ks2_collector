@@ -100,7 +100,7 @@ impl<'a> Act {
                     let current_price = &sheet.data[(row, current_col)];
 
                     if base_price.is_float() || current_price.is_float() {
-                        let row_name = wrapped_row_name.get_string().unwrap().to_string(); //unwrap не нужно обрабатывать: выше была проверка name.is_string
+                        let row_name = wrapped_row_name.get_string().unwrap().to_string(); //unwrap не обрабатывать: выше проверка name.is_string
 
                         match acc.iter_mut().find(|object| object.name == row_name) {
                             Some(x) => {
@@ -124,7 +124,6 @@ impl<'a> Act {
             });
 
         Ok(temp_vec_row)
-        // Err(format!("Ошибка повторяющихся строк в итогах акта: {} имеет строки с повторяющимися наименованиями затрат, таких строк {} шт.", sheet.path, len_diff))
     }
 }
 
