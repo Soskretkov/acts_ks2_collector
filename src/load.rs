@@ -1,5 +1,12 @@
+
+#[derive(Debug, Clone)]
+pub struct OutputData {
+    pub new_name: Option<&'static str>,
+    pub number_of_copies: usize,
+    pub data_source: DataSource,
+}
 // Четыре вида данных на выходе: в готовом виде в шапке, в готов виде в итогах акта (2 варанта), и нет готовых и нужно расчитать программой:
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataSource {
     InTableHeader(&'static str),
     AtCurrPrices(&'static str),
@@ -7,36 +14,61 @@ pub enum DataSource {
     Calculate,
 }
 
-// Нужен код, который будет назначать длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
+// Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
 // но если какой-то акт имеет 16, 18, 0 или, скажем, 40 строк в итогах, то нужна какая-то логика, чтобы соотнести эти 40 строк одного акта
 // с 17 строками других актов. Нужно решение, как не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
 // Таким образом у нас данные условно делятся на ожидаемые (им порядок можно сразу задать) и случайные
-
-// Нам нужна структура, содержащая информацию о колонках, которые мы ожидаем получить из актов, и здесь мы будем задавать порядок.
-// Мы можем составить представление о начале заголовка выходной формы, читая кортеж схематично: ("Нужно ли переименовать имя по умолчанию?", "Где искать данные?"):
-// Позиция кортежа в массиве будет соответсвовать столбцу выходной формы (это крайние левые столбцы шапки):
+// Ниже массив, содержащий информацию о колонках, которые мы ожидаем получить из актов, здесь будем задавать порядок.
+// Позиция в массиве будет соответсвовать столбцу выходной формы (это крайние левые столбцы шапки):
 
 #[rustfmt::skip]
-pub const PART_1_REPORT: [(Option<&'static str>, DataSource); 18] = [
-    (None,                                  DataSource::InTableHeader("Исполнитель")),
-    (Some("Глава"),                         DataSource::Calculate),
-    (None,                                  DataSource::InTableHeader("Объект")),
-    (None,                                                          DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")),
-    (None,                                  DataSource::InTableHeader("Договор №")),
-    (None,                                  DataSource::InTableHeader("Договор дата")),
-    (Some("Прихватизация машин"),                                   DataSource::AtBasePrices("Эксплуатация машин")),
-    (None,                                  DataSource::InTableHeader("Смета №")),
-    (None,                                  DataSource::InTableHeader("Смета наименование")),
-    (Some("По смете в ц.2000г."),           DataSource::Calculate),
-    (Some("Выполнение работ в ц.2000г."),   DataSource::Calculate),
-    (None,                                  DataSource::InTableHeader("Акт №")),
-    (Some("Акт дата"),                      DataSource::Calculate),
-    (Some("Отчетный период начало"),        DataSource::Calculate),
-    (Some("Отчетный период окончание"),     DataSource::Calculate),
-    (None,                                  DataSource::InTableHeader("Метод расчета")),
-    (Some("Ссылка на папку"),               DataSource::Calculate),
-    (Some("Ссылка на файл"),                DataSource::Calculate),
+pub const REPORTING_PRESETS: [OutputData; 18] = [
+    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Исполнитель")},
+    OutputData{new_name: Some("Глава"),                         number_of_copies: 1, data_source: DataSource::Calculate},
+    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Объект")},
+    OutputData{new_name: None,                                                          number_of_copies: 1, data_source: DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")},
+    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Договор №")},
+    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Договор дата")},
+    OutputData{new_name: Some("Прихватизация машин"),                                   number_of_copies: 1, data_source: DataSource::AtBasePrices("Эксплуатация машин")},
+    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Смета №")},
+    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Смета наименование")},
+    OutputData{new_name: Some("По смете в ц.2000г."),           number_of_copies: 1, data_source: DataSource::Calculate},
+    OutputData{new_name: Some("Выполнение работ в ц.2000г."),   number_of_copies: 1, data_source: DataSource::Calculate},
+    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Акт №")},
+    OutputData{new_name: Some("Акт дата"),                      number_of_copies: 1, data_source: DataSource::Calculate},
+    OutputData{new_name: Some("Отчетный период начало"),        number_of_copies: 1, data_source: DataSource::Calculate},
+    OutputData{new_name: Some("Отчетный период окончание"),     number_of_copies: 1, data_source: DataSource::Calculate},
+    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Метод расчета")},
+    OutputData{new_name: Some("Ссылка на папку"),               number_of_copies: 1, data_source: DataSource::Calculate},
+    OutputData{new_name: Some("Ссылка на файл"),                number_of_copies: 1, data_source: DataSource::Calculate},
 ];
+
+// struct Print {
+
+// }
+
+
+// #[rustfmt::skip]
+// pub const PART_1_REPORT: [(Option<&'static str>, DataSource); 18] = [
+//     (None,                                  DataSource::InTableHeader("Исполнитель")),
+//     (Some("Глава"),                         DataSource::Calculate),
+//     (None,                                  DataSource::InTableHeader("Объект")),
+//     (None,                                                          DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")),
+//     (None,                                  DataSource::InTableHeader("Договор №")),
+//     (None,                                  DataSource::InTableHeader("Договор дата")),
+//     (Some("Прихватизация машин"),                                   DataSource::AtBasePrices("Эксплуатация машин")),
+//     (None,                                  DataSource::InTableHeader("Смета №")),
+//     (None,                                  DataSource::InTableHeader("Смета наименование")),
+//     (Some("По смете в ц.2000г."),           DataSource::Calculate),
+//     (Some("Выполнение работ в ц.2000г."),   DataSource::Calculate),
+//     (None,                                  DataSource::InTableHeader("Акт №")),
+//     (Some("Акт дата"),                      DataSource::Calculate),
+//     (Some("Отчетный период начало"),        DataSource::Calculate),
+//     (Some("Отчетный период окончание"),     DataSource::Calculate),
+//     (None,                                  DataSource::InTableHeader("Метод расчета")),
+//     (Some("Ссылка на папку"),               DataSource::Calculate),
+//     (Some("Ссылка на файл"),                DataSource::Calculate),
+// ];
 
 // В массиве выше перечислены далеко не все столбцы что будут в акте (в акте может быть все что угодно и повторяться в неизвестном количестве).
 // В PART_1 мы перечислили только то, чему хотели задать порядок заранее, но есть столбцы, где мы хотим оставить тот порядок, который существует в актах.

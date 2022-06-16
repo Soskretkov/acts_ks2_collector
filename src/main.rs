@@ -29,6 +29,18 @@ fn main() {
     let act3 = act.clone();
     let vector_of_acts: Vec<Act> = vec![act1, act2, act3];
 
+
+    // Cтруктура из трех векторов (их длины) и книги Excel
+    // Set shablon:: принимает акт для шаблона
+    // Write:: принимает акт для записи
+    // Format_Write:: форматирует записанное
+    // Памятка: переменная position будет считать сумму ДО, длину векторов будем хранить в структуре
+    
+
+
+
+
+
     // println!("{:#?}", vector_of_acts[0].data_of_totals);
 
     // let (_part_2_fst_fls_base, _part_4_fst_fls_curr) = load::first_file_data_names(&vector_of_acts[0].data_of_totals);
