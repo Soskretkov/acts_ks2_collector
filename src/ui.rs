@@ -69,7 +69,7 @@ fn inputting_path() -> String {
 fn inputting_sheet_name() -> String {
     loop {
         Term::stdout().clear_screen();
-        println!("Cпособ указания имени листа не чувствителен к регистру - нет разницы, вводите ли вы «Лист1» или «лист1»;");
+        println!("Нет разницы, вводите ли вы «Лист1» или «лист1» - способ указания листа не чувствителен к регистру.");
         thread::sleep(Duration::from_secs(1));
         println!("Введите имя листа:");
         let mut temp_sh_name = String::new();

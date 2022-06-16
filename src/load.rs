@@ -1,5 +1,3 @@
-use crate::transform::TotalsRow;
-
 // Четыре вида данных на выходе: в готовом виде в шапке, в готов виде в итогах акта (2 варанта), и нет готовых и нужно расчитать программой:
 #[derive(PartialEq)]
 pub enum DataSource {
@@ -47,35 +45,35 @@ pub const PART_1_REPORT: [(Option<&'static str>, DataSource); 18] = [
 // Другими словами, структура нашего отчета воспроизведет порядок итогов первого акта в выборке. А все что не вписальось в эту структуру будет помещено в крайние правые столбцы.
 // У нас два вида данных в итогах: базовые и текущие цены. Это нужно учитывать.
 
-pub fn first_file_data_names(act: &[TotalsRow]) -> (Vec<&String>, Vec<&String>) {
-    let (already_collected_base, already_collected_curr) =
-        PART_1_REPORT
-            .iter()
-            .fold((Vec::new(), Vec::new()), |mut acc, (_, source)| {
-                if let DataSource::AtBasePrices(default_name) = source {
-                    acc.0.push(*default_name)
-                };
+// pub fn first_file_data_names(act: &[TotalsRow]) -> (Vec<&String>, Vec<&String>) {
+//     let (already_collected_base, already_collected_curr) =
+//         PART_1_REPORT
+//             .iter()
+//             .fold((Vec::new(), Vec::new()), |mut acc, (_, source)| {
+//                 if let DataSource::AtBasePrices(default_name) = source {
+//                     acc.0.push(*default_name)
+//                 };
 
-                if let DataSource::AtCurrPrices(default_name) = source {
-                    acc.1.push(*default_name)
-                };
-                acc
-            });
+//                 if let DataSource::AtCurrPrices(default_name) = source {
+//                     acc.1.push(*default_name)
+//                 };
+//                 acc
+//             });
 
-    let (fst_fls_base, fst_fls_curr) =
-        act.iter()
-            .fold((Vec::new(), Vec::new()), |mut acc, x| {
-                if x.base_price.is_some() && !already_collected_base.iter().any(|item| item == &x.name) {
-                        acc.0.push(&x.name)
-                }
-                                
-                if x.current_price.is_some() && !already_collected_curr.iter().any(|item| item == &x.name) {
-                        acc.1.push(&x.name)                        
-                    
-                }
-                
-                acc
-            });
+//     let (fst_fls_base, fst_fls_curr) =
+//         act.iter()
+//             .fold((Vec::new(), Vec::new()), |mut acc, x| {
+//                 if x.base_price.is_some() && !already_collected_base.iter().any(|item| item == &x.name) {
+//                         acc.0.push(&x.name)
+//                 }
 
-    (fst_fls_base, fst_fls_curr)
-}
+//                 if x.current_price.is_some() && !already_collected_curr.iter().any(|item| item == &x.name) {
+//                         acc.1.push(&x.name)
+
+//                 }
+
+//                 acc
+//             });
+
+//     (fst_fls_base, fst_fls_curr)
+// }

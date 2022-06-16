@@ -10,6 +10,6 @@ Attention! The program is under development! The program does not work completel
 
 ● Only files with «.xlsm» extension are collected.
 
-● The way you specify the sheet name is not case-sensitive - there is no difference if you type «Sheet1» or «sheet1».
+● It makes no difference whether you enter "Sheet1" or "sheet1" - the way you specify the sheet name is not case-sensitive.
 
 ● Useful tip: rename an Excel file by adding the «@» symbol, and the program will not collect its data.

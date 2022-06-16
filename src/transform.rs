@@ -1,49 +1,6 @@
 use crate::extract::*;
-use calamine::{DataType, Reader};
+use calamine::DataType;
 use std::collections::HashMap;
-
-impl Sheet {
-    pub fn new<'a>(
-        workbook: &'a mut Book,
-        sheetname: &'static str,
-        search_reference_points: &[(usize, Required, &'static str)],
-        expected_sum_of_requir_col: usize,
-    ) -> Result<Sheet, &'static str> {
-        //) -> Result<Sheet, Box<dyn Error>> {
-        let data = workbook.data.worksheet_range(sheetname).unwrap().unwrap();
-        let mut search_points = HashMap::new();
-
-        let mut temp_sh_iter = data.used_cells();
-        for item in search_reference_points {
-            let temp = temp_sh_iter
-                .find(|x| x.2.get_string().unwrap_or("default") == item.2)
-                .unwrap();
-            search_points.insert(item.2, (temp.0, temp.1));
-        }
-
-        //Ниже значений на удаленность их столбцов чтобы гарантировать что найден нужный лист.
-        let first_col = search_points.get("Стройка").unwrap().1;
-
-        let (just_a_amount_requir_col, just_a_sum_requir_col) = search_reference_points
-            .iter()
-            .fold((0_usize, 0), |acc, item| match item.1 {
-                Required::Y => (acc.0 + 1, acc.1 + search_points.get(item.2).unwrap().1),
-                _ => acc,
-            });
-
-        match just_a_sum_requir_col - first_col * just_a_amount_requir_col
-            == expected_sum_of_requir_col
-        {
-            true => Ok(Sheet {
-                path: workbook.path.clone(),
-                sheetname,
-                data,
-                search_points,
-            }),
-            false => Err("Не найдена шапка КС-2"),
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Act {
@@ -70,8 +27,7 @@ impl<'a> Act {
             })
             .collect();
 
-        let mut data_of_totals = Self::raw_totals(&sheet).unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
-        Self::mark_duplicates(&mut data_of_totals);
+        let data_of_totals = Self::raw_totals(&sheet).unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
 
         Ok(Act {
             path: sheet.path,
@@ -84,27 +40,29 @@ impl<'a> Act {
     fn cells_addreses_in_header(
         search_points: &HashMap<&'static str, (usize, usize)>,
     ) -> Vec<Option<(usize, usize)>> {
-        let stroika_adr = search_points.get("Стройка").unwrap(); //unwrap не требует обработки
-        let object_adr = search_points.get("Объект").unwrap(); //unwrap не требует обработки
-        let contrac_adr = search_points.get("Договор подряда").unwrap(); //unwrap не требует обработки
-        let document_number_adr = search_points.get("Номер документа").unwrap(); //unwrap не требует обработки
-        let workname_adr = search_points.get("Наименование работ и затрат").unwrap(); //unwrap не требует обработки
+        let stroika_adr = search_points.get("стройка").unwrap(); //unwrap не требует обработки
+        let object_adr = search_points.get("объект").unwrap(); //unwrap не требует обработки
+        let contrac_adr = search_points.get("договор подряда").unwrap(); //unwrap не требует обработки
+        let dopsogl_adr = search_points.get("доп. соглашение").unwrap(); //unwrap не требует обработки
+        let document_number_adr = search_points.get("номер документа").unwrap(); //unwrap не требует обработки
+        let workname_adr = search_points.get("наименование работ и затрат").unwrap(); //unwrap не требует обработки
 
         let temp_vec: Vec<Option<(usize, usize)>> = NAMES_OF_HEADER.iter().fold(Vec::new(), |mut vec, shift| {
 
                 let temp_cells_address: Option<(usize, usize)> = match shift {
                     (_, Some((point_name, (row, col)))) => {
                         let temp = match *point_name {
-                            "Объект" => ((object_adr.0 as isize + *row as isize) as usize, (object_adr.1 as isize + *col as isize) as usize),
-                            "Договор подряда" => ((contrac_adr.0 as isize + *row as isize) as usize, (contrac_adr.1 as isize + *col as isize) as usize),
-                            "Номер документа" => ((document_number_adr.0 as isize + *row as isize) as usize, (document_number_adr.1 as isize + *col as isize) as usize),
-                            "Наименование работ и затрат" => ((workname_adr.0 as isize + *row as isize) as usize, (workname_adr.1 as isize + *col as isize) as usize),
-                            _ => unreachable!("Ошибка в логике программы, сообщающая о необходимости исправить код программы: ячейка в Excel с содержимым '{}' будет причиной подобных ошибок, пока не станет типом Required::Y чтобы обрабатываться", point_name),
+                            "объект" => ((object_adr.0 as isize + *row as isize) as usize, (object_adr.1 as isize + *col as isize) as usize),
+                            "договор подряда" => ((contrac_adr.0 as isize + *row as isize) as usize, (contrac_adr.1 as isize + *col as isize) as usize),
+                            "доп. соглашение" => ((dopsogl_adr.0 as isize + *row as isize) as usize, (dopsogl_adr.1 as isize + *col as isize) as usize),
+                            "номер документа" => ((document_number_adr.0 as isize + *row as isize) as usize, (document_number_adr.1 as isize + *col as isize) as usize),
+                            "наименование работ и затрат" => ((workname_adr.0 as isize + *row as isize) as usize, (workname_adr.1 as isize + *col as isize) as usize),
+                            _ => unreachable!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: ячейка в Excel с содержимым '{}' будет причиной подобных ошибок, пока не станет типом Required::Y, подлежащим обработке", point_name),
                         };
                         Some(temp)
                     },
                     (target_name, _) => match *target_name {
-                        "Исполнитель" => search_points.get("Исполнитель").map(|(row, col)| (*row, *col + 3)),
+                        "Исполнитель" => search_points.get("исполнитель").map(|(row, col)| (*row, *col + 3)),
                         "Глава" => match stroika_adr.0 + 2 == object_adr.0 {
                             true => Some((stroika_adr.0 + 1, stroika_adr.1)),
                             false => None,
@@ -127,43 +85,7 @@ impl<'a> Act {
     fn raw_totals(sheet: &Sheet) -> Result<Vec<TotalsRow>, String> {
         let (starting_row, starting_col) = *sheet
             .search_points
-            .get("Стоимость материальных ресурсов (всего)")
-            .unwrap(); //unwrap не требует обработки
-
-        let total_row = sheet.data.get_size().0;
-        let base_col = starting_col + 6;
-        let current_col = starting_col + 9;
-
-        let temp_vec_row = (starting_row..total_row).fold(Vec::new(), |mut acc, row| {
-            let wrapped_row_name = &sheet.data[(row, starting_col)];
-            if wrapped_row_name.is_string() {
-                let base_price = &sheet.data[(row, base_col)];
-                let current_price = &sheet.data[(row, current_col)];
-
-                if base_price.is_float() || current_price.is_float() {
-                    let row_name = wrapped_row_name.get_string().unwrap().to_string(); //unwrap не нужно обрабатывать: выше была проверка name.is_string
-                                                                                       // if true {
-
-                    let temp_total_row = TotalsRow {
-                        name: row_name,
-                        base_price: base_price.get_float(),
-                        current_price: current_price.get_float(),
-                        duplicate_number: None,
-                    };
-                    acc.push(temp_total_row);
-                }
-            }
-            acc
-        });
-
-        Ok(temp_vec_row)
-        // Err(format!("Ошибка повторяющихся строк в итогах акта: {} имеет строки с повторяющимися наименованиями затрат, таких строк {} шт.", sheet.path, len_diff))
-    }
-
-    fn _raw_totals_2(sheet: &Sheet) -> Result<Vec<TotalsRow_2>, String> {
-        let (starting_row, starting_col) = *sheet
-            .search_points
-            .get("Стоимость материальных ресурсов (всего)")
+            .get("стоимость материальных ресурсов (всего)")
             .unwrap(); //unwrap не требует обработки
 
         let total_row = sheet.data.get_size().0;
@@ -171,7 +93,7 @@ impl<'a> Act {
         let current_col = starting_col + 9;
 
         let temp_vec_row =
-            (starting_row..total_row).fold(Vec::<TotalsRow_2>::new(), |mut acc, row| {
+            (starting_row..total_row).fold(Vec::<TotalsRow>::new(), |mut acc, row| {
                 let wrapped_row_name = &sheet.data[(row, starting_col)];
                 if wrapped_row_name.is_string() {
                     let base_price = &sheet.data[(row, base_col)];
@@ -180,8 +102,6 @@ impl<'a> Act {
                     if base_price.is_float() || current_price.is_float() {
                         let row_name = wrapped_row_name.get_string().unwrap().to_string(); //unwrap не нужно обрабатывать: выше была проверка name.is_string
 
-                        // Выше не лезем
-
                         match acc.iter_mut().find(|object| object.name == row_name) {
                             Some(x) => {
                                 x.base_price.push(base_price.get_float());
@@ -189,7 +109,7 @@ impl<'a> Act {
                                 x.row_number.push(row);
                             }
                             None => {
-                                let temp_total_row = TotalsRow_2 {
+                                let temp_total_row = TotalsRow {
                                     name: row_name,
                                     base_price: vec![base_price.get_float()],
                                     current_price: vec![current_price.get_float()],
@@ -198,8 +118,6 @@ impl<'a> Act {
                                 acc.push(temp_total_row);
                             }
                         }
-
-                        // Ниже не меняем
                     }
                 }
                 acc
@@ -208,29 +126,10 @@ impl<'a> Act {
         Ok(temp_vec_row)
         // Err(format!("Ошибка повторяющихся строк в итогах акта: {} имеет строки с повторяющимися наименованиями затрат, таких строк {} шт.", sheet.path, len_diff))
     }
-    fn mark_duplicates(vec: &mut [TotalsRow]) {
-        let mut map = HashMap::new();
-
-        vec.iter_mut().for_each(|row| {
-            let count = map.entry(&row.name).or_insert(0_u8);
-            *count += 1;
-
-            if *count > 1 {
-                row.duplicate_number = Some(*count - 1);
-            }
-        });
-    }
 }
 
 #[derive(Debug, Clone)]
 pub struct TotalsRow {
-    pub name: String,
-    pub base_price: Option<f64>,
-    pub current_price: Option<f64>,
-    pub duplicate_number: Option<u8>,
-}
-#[derive(Debug, Clone)]
-pub struct TotalsRow_2 {
     pub name: String,
     pub base_price: Vec<Option<f64>>,
     pub current_price: Vec<Option<f64>>,

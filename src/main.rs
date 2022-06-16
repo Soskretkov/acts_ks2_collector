@@ -18,7 +18,7 @@ fn main() {
         &mut wb,
         "Лист1",
         &SEARCH_REFERENCE_POINTS,
-        20, //Это сумма номеров столбцов Y-типа в SEARCH_REFERENCE_POINTS 0 + 0 + 3 + 5 + 9 + 3. Требуется для проверки
+        29, //передается для расчета смещения столбцов. Это сумма номеров столбцов Y-типа в SEARCH_REFERENCE_POINTS: 0 + 0 + 3 + 5 + 9 + 9 + 3.
     )
     .unwrap();
 
@@ -29,17 +29,21 @@ fn main() {
     let act3 = act.clone();
     let vector_of_acts: Vec<Act> = vec![act1, act2, act3];
 
-    let (_part_2_fst_fls_base, _part_4_fst_fls_curr) = load::first_file_data_names(&vector_of_acts[0].data_of_totals);
+    // let (_part_2_fst_fls_base, _part_4_fst_fls_curr) = load::first_file_data_names(&vector_of_acts[0].data_of_totals);
     // println!("{:#?}", vector_of_acts[0].data_of_totals);
 
-      println!("{:#?}", _part_2_fst_fls_base);
-      println!("{:#?}", _part_4_fst_fls_curr);
+    //   println!("{:#?}", _part_2_fst_fls_base);
+    //   println!("{:#?}", _part_4_fst_fls_curr);
 
     // Печать шапки
     let mut header = act
         .names_of_header
         .iter()
-        .zip(act.data_of_header.iter().map(|x| x.as_ref().unwrap()));
+        .zip(act.data_of_header.iter().map(|x| {
+            x.as_ref()
+                .unwrap_or(&transform::DateVariant::String("".to_string()))
+                .clone()
+        }));
 
     // for print in header {
     //     println!("{}:  {:?}", print.0 .0, print.1);
@@ -53,8 +57,8 @@ fn main() {
     println!(
         "\n{}: базовая - {}; текущая - {}",
         last_row.name,
-        last_row.base_price.unwrap_or(0.),
-        last_row.current_price.unwrap_or(0.)
+        last_row.base_price[0].unwrap_or(0.),
+        last_row.current_price[0].unwrap_or(0.)
     );
 
     //Печать rows Excel
