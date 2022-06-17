@@ -1,26 +1,26 @@
 use crate::transform::Act;
 
 #[derive(Debug, Clone)]
-pub struct OutputData {
-    pub rename: Option<&'static str>,
+pub struct OutputData<'a> {
+    pub rename: Option<&'a str>,
     pub columns_min: Option<usize>,
-    pub source: DataSource,
+    pub source: DataSource<'a>,
 }
 // Четыре вида данных на выходе: в готовом виде в шапке, в готов виде в итогах акта (2 варанта), и нет готовых (нужно расчитать программой):
 #[derive(Debug, Clone, PartialEq)]
-pub enum DataSource {
+pub enum DataSource<'a> {
     InTableHeader(&'static str),
-    AtCurrPrices(&'static str),
-    AtBasePrices(&'static str),
+    AtCurrPrices(&'a str),
+    AtBasePrices(&'a str),
     Calculate,
 }
 
-pub struct PrintPart {
-    vector: Vec<OutputData>,
+pub struct PrintPart<'a> {
+    vector: Vec<OutputData<'a>>,
     total_col: usize,
 }
 
-impl PrintPart {
+impl <'a>PrintPart<'a> {
     pub fn new(vector: Vec<OutputData>) -> PrintPart {
         let total_col = Self::count_col(&vector);
 
@@ -51,14 +51,14 @@ fn PrintPart_test() {
     assert_eq!(12, printpart.get_number_of_columns());
 }
 
-pub struct Report {
+pub struct Report<'a> {
     pub book: Option<xlsxwriter::Workbook>,
-    pub part_1_just: PrintPart,
-    pub part_2_base: PrintPart,
-    pub part_3_curr: PrintPart,
+    pub part_1_just: PrintPart<'a>,
+    pub part_2_base: PrintPart<'a>,
+    pub part_3_curr: PrintPart<'a>,
 }
 
-impl Report {
+impl <'a>Report<'a> {
     pub fn set_sample(sample: &Act) -> Result<Report, &'static str> {
         //-> Report{
         // Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
@@ -107,7 +107,7 @@ impl Report {
             part_3_curr,
         })
     }
-    fn other_parts(sample: &Act, part_1: &[OutputData]) {
+    fn other_parts<'b>(sample: &'b Act, part_1: &[OutputData]) {
         let (exclude_from_base, exclude_from_curr_part) =
             part_1
                 .iter()
@@ -121,25 +121,25 @@ impl Report {
                     };
                     acc
                 });
-        // let (fst_fls_base, fst_fls_curr) = sample.data_of_totals.iter().fold(
-        //     (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
-        //     |mut acc, x| {
-        //         if !already_collected_base.iter().any(|item| item == &x.name) {
-        //             let len_of_base = x.base_price.len();
+        let (fst_fls_base, fst_fls_curr) = sample.data_of_totals.iter().fold(
+            (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
+            |mut acc, x| {
+                if !exclude_from_base.iter().any(|item| item == &x.name) {
+                    let len_of_base = x.base_price.len();
 
-        //             if len_of_base > 0 {
-        //                 let outputdata = OutputData {
-        //                     new_name: None,
-        //                     number_of_copies: len_of_base,
-        //                     data_source: DataSource::AtBasePrices(&x.name),
-        //                 };
-        //                 acc.0.push(outputdata)
-        //             }
-        //         }
+                    if len_of_base > 0 {
+                        let outputdata = OutputData {
+                            rename: None,
+                            columns_min: Some(len_of_base),
+                            source: DataSource::AtBasePrices(&x.name[..]),
+                        };
+                        acc.0.push(outputdata)
+                    }
+                }
 
-        //         acc
-        //     },
-        // );
+                acc
+            },
+        );
     }
 
     pub fn _write_as_sample(_book: xlsxwriter::Workbook) {}

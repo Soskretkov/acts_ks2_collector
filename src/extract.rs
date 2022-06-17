@@ -127,8 +127,8 @@ impl Sheet {
                 _ => acc,
             });
 
-        if let false = (just_a_sum_requir_col - first_col * just_a_amount_requir_col
-            == expected_sum_of_requir_col)
+        if let false = just_a_sum_requir_col - first_col * just_a_amount_requir_col
+            == expected_sum_of_requir_col
         {
             return Err("Нетипичное заглавие (шапка) КС-2");
         }
