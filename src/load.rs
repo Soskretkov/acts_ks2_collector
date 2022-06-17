@@ -2,12 +2,21 @@ use crate::transform::Act;
 
 #[derive(Debug, Clone)]
 pub struct OutputData<'a> {
-    pub rename: Option<&'a str>,
-    pub columns_min: Option<usize>,
+    pub set_name: Option<&'a str>,
+    // pub change_location: Parts,
+    pub print_quantity: Option<usize>,
     pub source: DataSource<'a>,
 }
 // Четыре вида данных на выходе: в готовом виде в шапке, в готов виде в итогах акта (2 варанта), и нет готовых (нужно расчитать программой):
 #[derive(Debug, Clone, PartialEq)]
+
+enum Parts {
+    First(usize),
+    Curr,
+    Base,
+}
+
+#[derive(Debug, Clone)]
 pub enum DataSource<'a> {
     InTableHeader(&'static str),
     AtCurrPrices(&'a str),
@@ -20,7 +29,7 @@ pub struct PrintPart<'a> {
     total_col: usize,
 }
 
-impl <'a>PrintPart<'a> {
+impl<'a> PrintPart<'a> {
     pub fn new(vector: Vec<OutputData>) -> PrintPart {
         let total_col = Self::count_col(&vector);
 
@@ -30,21 +39,19 @@ impl <'a>PrintPart<'a> {
         self.total_col
     }
     fn count_col(vector: &[OutputData]) -> usize {
-        vector
-            .iter()
-            .fold(0, |acc, copy| match copy.columns_min {
-                Some(x) => acc + x,
-                None => acc,
-            })
+        vector.iter().fold(0, |acc, copy| match copy.print_quantity {
+            Some(x) => acc + x,
+            None => acc,
+        })
     }
 }
 #[test]
 fn PrintPart_test() {
     #[rustfmt::skip]
         let vec_to_test = vec![
-            OutputData{rename: None,           columns_min: Some(1),  source: DataSource::InTableHeader("Исполнитель")},
-            OutputData{rename: Some("Глава"),  columns_min: Some(11), source: DataSource::Calculate},
-            OutputData{rename: None,           columns_min: Some(0),  source: DataSource::InTableHeader("Объект")},
+            OutputData{set_name: None,           print_quantity: Some(1),  source: DataSource::InTableHeader("Исполнитель")},
+            OutputData{set_name: Some("Глава"),  print_quantity: Some(11), source: DataSource::Calculate},
+            OutputData{set_name: None,           print_quantity: Some(0),  source: DataSource::InTableHeader("Объект")},
         ];
     let printpart = PrintPart::new(vec_to_test);
 
@@ -58,7 +65,7 @@ pub struct Report<'a> {
     pub part_3_curr: PrintPart<'a>,
 }
 
-impl <'a>Report<'a> {
+impl<'a> Report<'a> {
     pub fn set_sample(sample: &Act) -> Result<Report, &'static str> {
         //-> Report{
         // Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
@@ -70,24 +77,26 @@ impl <'a>Report<'a> {
 
         #[rustfmt::skip]
         let vec_1 = vec![
-            OutputData{rename: None,                                  columns_min: Some(1), source: DataSource::InTableHeader("Исполнитель")},
-            OutputData{rename: Some("Глава"),                         columns_min: Some(1), source: DataSource::Calculate},
-            OutputData{rename: None,                                  columns_min: Some(1), source: DataSource::InTableHeader("Объект")},
-            OutputData{rename: None,                                                        columns_min: Some(1), source: DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")},
-            OutputData{rename: None,                                  columns_min: Some(1), source: DataSource::InTableHeader("Договор №")},
-            OutputData{rename: None,                                  columns_min: Some(1), source: DataSource::InTableHeader("Договор дата")},
-            OutputData{rename: Some("Роботизация машин"),                                   columns_min: Some(1), source: DataSource::AtBasePrices("Эксплуатация машин")},
-            OutputData{rename: None,                                  columns_min: Some(1), source: DataSource::InTableHeader("Смета №")},
-            OutputData{rename: None,                                  columns_min: Some(1), source: DataSource::InTableHeader("Смета наименование")},
-            OutputData{rename: Some("По смете в ц.2000г."),           columns_min: Some(1), source: DataSource::Calculate},
-            OutputData{rename: Some("Выполнение работ в ц.2000г."),   columns_min: Some(1), source: DataSource::Calculate},
-            OutputData{rename: None,                                  columns_min: Some(1), source: DataSource::InTableHeader("Акт №")},
-            OutputData{rename: Some("Акт дата"),                      columns_min: Some(1), source: DataSource::Calculate},
-            OutputData{rename: Some("Отчетный период начало"),        columns_min: Some(1), source: DataSource::Calculate},
-            OutputData{rename: Some("Отчетный период окончание"),     columns_min: Some(1), source: DataSource::Calculate},
-            OutputData{rename: None,                                  columns_min: Some(1), source: DataSource::InTableHeader("Метод расчета")},
-            OutputData{rename: Some("Ссылка на папку"),               columns_min: Some(1), source: DataSource::Calculate},
-            OutputData{rename: Some("Ссылка на файл"),                columns_min: Some(1), source: DataSource::Calculate},
+            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Исполнитель")},
+            OutputData{set_name: Some("Глава"),                         print_quantity: Some(1), source: DataSource::Calculate},
+            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Объект")},
+            OutputData{set_name: None,                                                        print_quantity: Some(1), source: DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")},
+            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Договор №")},
+            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Договор дата")},
+            OutputData{set_name: Some("Роботизация машин"),                                   print_quantity: Some(1), source: DataSource::AtBasePrices("Эксплуатация машин")},
+            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Смета №")},
+            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Смета наименование")},
+            OutputData{set_name: Some("По смете в ц.2000г."),           print_quantity: Some(1), source: DataSource::Calculate},
+            OutputData{set_name: Some("Выполнение работ в ц.2000г."),   print_quantity: Some(1), source: DataSource::Calculate},
+            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Акт №")},
+            OutputData{set_name: Some("Акт дата"),                      print_quantity: Some(1), source: DataSource::Calculate},
+            OutputData{set_name: Some("Отчетный период начало"),        print_quantity: Some(1), source: DataSource::Calculate},
+            OutputData{set_name: Some("Отчетный период окончание"),     print_quantity: Some(1), source: DataSource::Calculate},
+            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Метод расчета")},
+            OutputData{set_name: Some("Ссылка на папку"),               print_quantity: Some(1), source: DataSource::Calculate},
+            OutputData{set_name: Some("Ссылка на файл"),                print_quantity: Some(1), source: DataSource::Calculate},
+            OutputData{set_name: None,                                                        print_quantity: None,    source: DataSource::AtCurrPrices("Итого с К = 1")},
+            OutputData{set_name: Some("Итого с К = 9999999999999999"),                        print_quantity: Some(1), source: DataSource::AtBasePrices("Итого с К = 1")},
         ];
         // В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
         // В PART_1 мы перечислили, то чему хотели задать порядок заранее, но есть столбцы, где мы хотим оставить порядок, который существует в актах.
@@ -121,17 +130,18 @@ impl <'a>Report<'a> {
                     };
                     acc
                 });
-        let (fst_fls_base, fst_fls_curr) = sample.data_of_totals.iter().fold(
+
+        let (part_2_base, part_3_curr) = sample.data_of_totals.iter().fold(
             (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
             |mut acc, x| {
                 if !exclude_from_base.iter().any(|item| item == &x.name) {
-                    let len_of_base = x.base_price.len();
+                    let columns_min = x.base_price.iter().map(Option::is_some).count();
 
-                    if len_of_base > 0 {
+                    if columns_min > 0 {
                         let outputdata = OutputData {
-                            rename: None,
-                            columns_min: Some(len_of_base),
-                            source: DataSource::AtBasePrices(&x.name[..]),
+                            set_name: None,
+                            print_quantity: Some(columns_min),
+                            source: DataSource::AtBasePrices(&x.name),
                         };
                         acc.0.push(outputdata)
                     }
