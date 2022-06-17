@@ -93,14 +93,17 @@ impl<'a> Act {
         let base_col = starting_col + 6;
         let current_col = starting_col + 9;
 
-        let temp_vec_row =
-            (starting_row..total_row).fold(Vec::<TotalsRow>::new(), |mut acc, row| {
+        let (_, temp_vec_row) = (starting_row..total_row).fold(
+            (false, Vec::<TotalsRow>::new()),
+            |(mut found_blank_row, mut acc), row| {
                 let wrapped_row_name = &sheet.data[(row, starting_col)];
                 if wrapped_row_name.is_string() {
                     let base_price = &sheet.data[(row, base_col)];
                     let current_price = &sheet.data[(row, current_col)];
 
-                    if base_price.is_float() || current_price.is_float() {
+                    //Если пустых ячеек вместо имени еще не встречалось, то собираем данные независимо от наличия цены.
+                    //Ситуация меняется если встретилось первое пустое имя: теперь потребуется и имя и цена (перестраховка на случай случайных пустых строк)
+                    if !found_blank_row || base_price.is_float() || current_price.is_float() {
                         let row_name = wrapped_row_name.get_string().unwrap().to_string(); //unwrap не обрабатывать: выше проверка name.is_string
 
                         match acc.iter_mut().find(|object| object.name == row_name) {
@@ -120,9 +123,12 @@ impl<'a> Act {
                             }
                         }
                     }
+                } else if !found_blank_row {
+                    found_blank_row = true;
                 }
-                acc
-            });
+                (found_blank_row, acc)
+            },
+        );
 
         Ok(temp_vec_row)
     }
