@@ -64,6 +64,7 @@ pub struct Sheet {
     pub sheetname: &'static str,
     pub data: Range<DataType>,
     pub search_points: HashMap<&'static str, (usize, usize)>,
+    pub range_start: (usize, usize),
 }
 
 impl Sheet {
@@ -73,6 +74,7 @@ impl Sheet {
         search_reference_points: &[(usize, Required, &'static str)],
         expected_sum_of_requir_col: usize,
     ) -> Result<Sheet, &'static str> {
+
         let data = match workbook.data.worksheet_range(sheetname) {
             Some(x) => x.unwrap(),
             None => return Err("Отсуствует запрошенный лист"),
@@ -125,16 +127,25 @@ impl Sheet {
                 _ => acc,
             });
 
-        match just_a_sum_requir_col - first_col * just_a_amount_requir_col
-            == expected_sum_of_requir_col
+        if let false = (just_a_sum_requir_col - first_col * just_a_amount_requir_col
+            == expected_sum_of_requir_col)
         {
-            true => Ok(Sheet {
+            return Err("Нетипичное заглавие (шапка) КС-2");
+        }
+
+        let range_start = match data.start() {
+            Some(x) => (x.0 as usize, x.1 as usize),
+            None => return Err("Не удалось получить начало диапазона листа"),
+        };
+
+        
+            Ok(Sheet {
                 path: workbook.path.clone(),
                 sheetname,
                 data,
                 search_points,
-            }),
-            false => Err("Смещенные столбцы в КС-2, невозможно собрать данные"),
+                range_start,
+            })
         }
     }
-}
+

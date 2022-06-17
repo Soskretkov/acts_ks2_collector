@@ -104,39 +104,41 @@ impl Report {
             part_3,
         })
     }
+    fn first_file_data_names(sample: &Act, part_1: &[OutputData]) {
+        let (already_collected_base, already_collected_curr) =
+            part_1
+                .iter()
+                .fold((Vec::new(), Vec::new()), |mut acc, outputdata| {
+                    if let DataSource::AtBasePrices(default_name) = outputdata.data_source {
+                        acc.0.push(default_name)
+                    };
+
+                    if let DataSource::AtCurrPrices(default_name) = outputdata.data_source {
+                        acc.1.push(default_name)
+                    };
+                    acc
+                });
+        // let (fst_fls_base, fst_fls_curr) = sample.data_of_totals.iter().fold(
+        //     (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
+        //     |mut acc, x| {
+        //         if !already_collected_base.iter().any(|item| item == &x.name) {
+        //             let len_of_base = x.base_price.len();
+
+        //             if len_of_base > 0 {
+        //                 let outputdata = OutputData {
+        //                     new_name: None,
+        //                     number_of_copies: len_of_base,
+        //                     data_source: DataSource::AtBasePrices(&x.name),
+        //                 };
+        //                 acc.0.push(outputdata)
+        //             }
+        //         }
+
+        //         acc
+        //     },
+        // );
+    }
+
     pub fn _write_as_sample(_book: xlsxwriter::Workbook) {}
     pub fn _format() {}
 }
-
-// pub fn first_file_data_names(act: &[TotalsRow]) -> (Vec<&String>, Vec<&String>) {
-//     let (already_collected_base, already_collected_curr) =
-//         PART_1_REPORT
-//             .iter()
-//             .fold((Vec::new(), Vec::new()), |mut acc, (_, source)| {
-//                 if let DataSource::AtBasePrices(default_name) = source {
-//                     acc.0.push(*default_name)
-//                 };
-
-//                 if let DataSource::AtCurrPrices(default_name) = source {
-//                     acc.1.push(*default_name)
-//                 };
-//                 acc
-//             });
-
-//     let (fst_fls_base, fst_fls_curr) =
-//         act.iter()
-//             .fold((Vec::new(), Vec::new()), |mut acc, x| {
-//                 if x.base_price.is_some() && !already_collected_base.iter().any(|item| item == &x.name) {
-//                         acc.0.push(&x.name)
-//                 }
-
-//                 if x.current_price.is_some() && !already_collected_curr.iter().any(|item| item == &x.name) {
-//                         acc.1.push(&x.name)
-
-//                 }
-
-//                 acc
-//             });
-
-//     (fst_fls_base, fst_fls_curr)
-// }

@@ -107,14 +107,14 @@ impl<'a> Act {
                             Some(x) => {
                                 x.base_price.push(base_price.get_float());
                                 x.current_price.push(current_price.get_float());
-                                x.row_number.push(row);
+                                x.row_number.push(sheet.range_start.0 + row + 1);
                             }
                             None => {
                                 let temp_total_row = TotalsRow {
                                     name: row_name,
                                     base_price: vec![base_price.get_float()],
                                     current_price: vec![current_price.get_float()],
-                                    row_number: vec![row],
+                                    row_number: vec![sheet.range_start.0 + row + 1],
                                 };
                                 acc.push(temp_total_row);
                             }
