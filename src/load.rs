@@ -1,3 +1,4 @@
+use crate::transform::Act;
 
 #[derive(Debug, Clone)]
 pub struct OutputData {
@@ -5,7 +6,7 @@ pub struct OutputData {
     pub number_of_copies: usize,
     pub data_source: DataSource,
 }
-// Четыре вида данных на выходе: в готовом виде в шапке, в готов виде в итогах акта (2 варанта), и нет готовых и нужно расчитать программой:
+// Четыре вида данных на выходе: в готовом виде в шапке, в готов виде в итогах акта (2 варанта), и нет готовых (нужно расчитать программой):
 #[derive(Debug, Clone, PartialEq)]
 pub enum DataSource {
     InTableHeader(&'static str),
@@ -14,68 +15,98 @@ pub enum DataSource {
     Calculate,
 }
 
-// Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
-// но если какой-то акт имеет 16, 18, 0 или, скажем, 40 строк в итогах, то нужна какая-то логика, чтобы соотнести эти 40 строк одного акта
-// с 17 строками других актов. Нужно решение, как не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
-// Таким образом у нас данные условно делятся на ожидаемые (им порядок можно сразу задать) и случайные
-// Ниже массив, содержащий информацию о колонках, которые мы ожидаем получить из актов, здесь будем задавать порядок.
-// Позиция в массиве будет соответсвовать столбцу выходной формы (это крайние левые столбцы шапки):
+pub struct PrintPart {
+    vector: Vec<OutputData>,
+    total_col: usize,
+}
 
-#[rustfmt::skip]
-pub const REPORTING_PRESETS: [OutputData; 18] = [
-    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Исполнитель")},
-    OutputData{new_name: Some("Глава"),                         number_of_copies: 1, data_source: DataSource::Calculate},
-    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Объект")},
-    OutputData{new_name: None,                                                          number_of_copies: 1, data_source: DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")},
-    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Договор №")},
-    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Договор дата")},
-    OutputData{new_name: Some("Прихватизация машин"),                                   number_of_copies: 1, data_source: DataSource::AtBasePrices("Эксплуатация машин")},
-    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Смета №")},
-    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Смета наименование")},
-    OutputData{new_name: Some("По смете в ц.2000г."),           number_of_copies: 1, data_source: DataSource::Calculate},
-    OutputData{new_name: Some("Выполнение работ в ц.2000г."),   number_of_copies: 1, data_source: DataSource::Calculate},
-    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Акт №")},
-    OutputData{new_name: Some("Акт дата"),                      number_of_copies: 1, data_source: DataSource::Calculate},
-    OutputData{new_name: Some("Отчетный период начало"),        number_of_copies: 1, data_source: DataSource::Calculate},
-    OutputData{new_name: Some("Отчетный период окончание"),     number_of_copies: 1, data_source: DataSource::Calculate},
-    OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Метод расчета")},
-    OutputData{new_name: Some("Ссылка на папку"),               number_of_copies: 1, data_source: DataSource::Calculate},
-    OutputData{new_name: Some("Ссылка на файл"),                number_of_copies: 1, data_source: DataSource::Calculate},
-];
+impl PrintPart {
+    pub fn new(vector: Vec<OutputData>) -> PrintPart {
+        let total_col = Self::count_col(&vector);
 
-// struct Print {
+        PrintPart { vector, total_col }
+    }
+    pub fn get_number_of_columns(&self) -> usize {
+        self.total_col
+    }
+    fn count_col(vector: &[OutputData]) -> usize {
+        vector
+            .iter()
+            .fold(0, |acc, copy| acc + copy.number_of_copies)
+    }
+}
+#[test]
+fn PrintPart_test() {
+    #[rustfmt::skip]
+        let vec_to_test = vec![
+            OutputData{new_name: None,           number_of_copies: 1,  data_source: DataSource::InTableHeader("Исполнитель")},
+            OutputData{new_name: Some("Глава"),  number_of_copies: 11, data_source: DataSource::Calculate},
+            OutputData{new_name: None,           number_of_copies: 0,  data_source: DataSource::InTableHeader("Объект")},
+        ];
+    let printpart = PrintPart::new(vec_to_test);
 
-// }
+    assert_eq!(12, printpart.get_number_of_columns());
+}
 
+pub struct Report {
+    pub book: Option<xlsxwriter::Workbook>,
+    pub part_1: PrintPart,
+    pub part_2: PrintPart,
+    pub part_3: PrintPart,
+}
 
-// #[rustfmt::skip]
-// pub const PART_1_REPORT: [(Option<&'static str>, DataSource); 18] = [
-//     (None,                                  DataSource::InTableHeader("Исполнитель")),
-//     (Some("Глава"),                         DataSource::Calculate),
-//     (None,                                  DataSource::InTableHeader("Объект")),
-//     (None,                                                          DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")),
-//     (None,                                  DataSource::InTableHeader("Договор №")),
-//     (None,                                  DataSource::InTableHeader("Договор дата")),
-//     (Some("Прихватизация машин"),                                   DataSource::AtBasePrices("Эксплуатация машин")),
-//     (None,                                  DataSource::InTableHeader("Смета №")),
-//     (None,                                  DataSource::InTableHeader("Смета наименование")),
-//     (Some("По смете в ц.2000г."),           DataSource::Calculate),
-//     (Some("Выполнение работ в ц.2000г."),   DataSource::Calculate),
-//     (None,                                  DataSource::InTableHeader("Акт №")),
-//     (Some("Акт дата"),                      DataSource::Calculate),
-//     (Some("Отчетный период начало"),        DataSource::Calculate),
-//     (Some("Отчетный период окончание"),     DataSource::Calculate),
-//     (None,                                  DataSource::InTableHeader("Метод расчета")),
-//     (Some("Ссылка на папку"),               DataSource::Calculate),
-//     (Some("Ссылка на файл"),                DataSource::Calculate),
-// ];
+impl Report {
+    pub fn set_sample(sample: &Act) -> Result<Report, &'static str> {
+        //-> Report{
+        // Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
+        // но если какой-то акт имеет 16, 18, 0 или, скажем, 40 строк в итогах, то нужна какая-то логика, чтобы соотнести эти 40 строк одного акта
+        // с 17 строками других актов. Нужно решение, как не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
+        // Данные делятся на ожидаемые (им порядок можно сразу задать) и случайные.
+        // Ниже массив, содержащий информацию о колонках, которые мы ожидаем получить из актов, здесь будем задавать порядок.
+        // Позиция в массиве будет соответсвовать столбцу выходной формы (это крайние левые столбцы шапки):
 
-// В массиве выше перечислены далеко не все столбцы что будут в акте (в акте может быть все что угодно и повторяться в неизвестном количестве).
-// В PART_1 мы перечислили только то, чему хотели задать порядок заранее, но есть столбцы, где мы хотим оставить тот порядок, который существует в актах.
-// Поделим отсутсвующие столбцы на два вида: соответсвующие форме акта первого в выборке и те, которые в его форму не вписались.
-// Столбцы, которые будут совпадать со структурой первого акта, получат больший приоритет и будут стремится в левое положение таблицы.
-// Другими словами, структура нашего отчета воспроизведет порядок итогов первого акта в выборке. А все что не вписальось в эту структуру будет помещено в крайние правые столбцы.
-// У нас два вида данных в итогах: базовые и текущие цены. Это нужно учитывать.
+        #[rustfmt::skip]
+        let vec_1 = vec![
+            OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Исполнитель")},
+            OutputData{new_name: Some("Глава"),                         number_of_copies: 1, data_source: DataSource::Calculate},
+            OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Объект")},
+            OutputData{new_name: None,                                                        number_of_copies: 1, data_source: DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")},
+            OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Договор №")},
+            OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Договор дата")},
+            OutputData{new_name: Some("Роботизация машин"),                                   number_of_copies: 1, data_source: DataSource::AtBasePrices("Эксплуатация машин")},
+            OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Смета №")},
+            OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Смета наименование")},
+            OutputData{new_name: Some("По смете в ц.2000г."),           number_of_copies: 1, data_source: DataSource::Calculate},
+            OutputData{new_name: Some("Выполнение работ в ц.2000г."),   number_of_copies: 1, data_source: DataSource::Calculate},
+            OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Акт №")},
+            OutputData{new_name: Some("Акт дата"),                      number_of_copies: 1, data_source: DataSource::Calculate},
+            OutputData{new_name: Some("Отчетный период начало"),        number_of_copies: 1, data_source: DataSource::Calculate},
+            OutputData{new_name: Some("Отчетный период окончание"),     number_of_copies: 1, data_source: DataSource::Calculate},
+            OutputData{new_name: None,                                  number_of_copies: 1, data_source: DataSource::InTableHeader("Метод расчета")},
+            OutputData{new_name: Some("Ссылка на папку"),               number_of_copies: 1, data_source: DataSource::Calculate},
+            OutputData{new_name: Some("Ссылка на файл"),                number_of_copies: 1, data_source: DataSource::Calculate},
+        ];
+        // В векторе REPORTING_PRESETS выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
+        // В PART_1 войдет то, что мы перечислили, чему хотели задать порядок заранее, но есть столбцы, где мы хотим оставить порядок, который существует в актах.
+        // Поделим отсутсвующие столбцы на два вида: соответсвующие форме акта, заданного в качестве шаблона, и те, которые в его форму не вписались.
+        // Столбцы, которые будут совпадать со структурой шаблонного акта, получат приоритет и будут стремится в левое положение таблицы в том же порядке.
+        // Другими словами, структура нашего отчета воспроизведет порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
+        // У нас два вида данных в итогах: базовые и текущие цены, получается отчет будет написан из 3 частей.
+
+        let part_1 = PrintPart::new(vec_1.clone());
+        let part_2 = PrintPart::new(vec_1.clone());
+        let part_3 = PrintPart::new(vec_1);
+
+        Ok(Report {
+            book: None,
+            part_1,
+            part_2,
+            part_3,
+        })
+    }
+    pub fn _write_as_sample(_book: xlsxwriter::Workbook) {}
+    pub fn _format() {}
+}
 
 // pub fn first_file_data_names(act: &[TotalsRow]) -> (Vec<&String>, Vec<&String>) {
 //     let (already_collected_base, already_collected_curr) =

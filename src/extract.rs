@@ -109,8 +109,8 @@ impl Sheet {
             .iter()
             .filter(|x| x.1 == Required::Y)
             .last()
-            .unwrap()  //unwrap не требует обработки: SEARCH_REFERENCE_POINTS всегда имеет значения
-            .2; 
+            .unwrap() //unwrap не требует обработки: SEARCH_REFERENCE_POINTS всегда имеет значения
+            .2;
         if search_points.get(test).is_none() {
             return Err("Лист не содержит всех необходимых данных");
         }

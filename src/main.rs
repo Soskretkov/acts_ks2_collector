@@ -1,4 +1,4 @@
-// use xlsxwriter::*;
+// use xlsxwriter::Workbook;
 mod extract;
 mod load;
 mod transform;
@@ -27,19 +27,13 @@ fn main() {
     let act1 = act.clone();
     let act2 = act.clone();
     let act3 = act.clone();
-    let vector_of_acts: Vec<Act> = vec![act1, act2, act3];
-
+    let _vector_of_acts: Vec<Act> = vec![act1, act2, act3];
 
     // Cтруктура из трех векторов (их длины) и книги Excel
     // Set shablon:: принимает акт для шаблона
     // Write:: принимает акт для записи
     // Format_Write:: форматирует записанное
     // Памятка: переменная position будет считать сумму ДО, длину векторов будем хранить в структуре
-    
-
-
-
-
 
     // println!("{:#?}", vector_of_acts[0].data_of_totals);
 
@@ -84,7 +78,7 @@ fn main() {
 
     // let start_of_range = sheet.search_points
     //     .get("стоимость материальных ресурсов (всего)")
-    //     .unwrap(); 
+    //     .unwrap();
     // for row in sheet.data.rows().skip(start_of_range.0) {
     //     println!("{:?}", row);
     // }
@@ -94,5 +88,4 @@ fn main() {
     // let mut sh1 = wb.add_worksheet(Some("Лист1")).unwrap();
     // sh1.write_string(0, 0, "Red text", None).unwrap();
     // wb.close().unwrap();
-    // }
 }
