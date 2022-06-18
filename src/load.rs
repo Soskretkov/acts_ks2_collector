@@ -16,7 +16,7 @@ pub enum Moving {
     Delete,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Source<'a> {
     InTableHeader(&'static str),
     AtCurrPrices(&'a str),
@@ -68,7 +68,7 @@ pub struct Report<'a> {
 
 impl<'a> Report<'a> {
     pub fn set_sample(sample: &Act) -> Result<Report, &'static str> {
-        //-> Report{
+        //-> Report
         // Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
         // но если какой-то акт имеет 16, 18, 0 или, скажем, 40 строк в итогах, то нужна какая-то логика, чтобы соотнести эти 40 строк одного акта
         // с 17 строками других актов. Нужно решение, как не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
@@ -118,35 +118,60 @@ impl<'a> Report<'a> {
         })
     }
     fn other_parts<'b>(sample: &'b Act, part_1: &[OutputData]) {
-        let (exclude_from_base, exclude_from_curr_part) =
-            part_1
-                .iter()
-                .fold((Vec::new(), Vec::new()), |mut acc, outputdata| {
-                    if let Source::AtBasePrices(default_name) = outputdata.source {
-                        acc.0.push(default_name)
-                    };
+        let exclude_from_base = part_1
+            .iter()
+            .filter(|outputdata| match outputdata.source {
+                Source::AtBasePrices(_) => true,
+                _ => false,
+            })
+            .collect::<Vec<_>>();
 
-                    if let Source::AtCurrPrices(default_name) = outputdata.source {
-                        acc.1.push(default_name)
-                    };
-                    acc
-                });
+        let exclude_from_curr = part_1
+            .iter()
+            .filter(|outputdata| match outputdata.source {
+                Source::AtCurrPrices(_) => true,
+                _ => false,
+            })
+            .collect::<Vec<_>>();
 
         let (part_2_base, part_3_curr) = sample.data_of_totals.iter().fold(
             (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
             |mut acc, x| {
-                if !exclude_from_base.iter().any(|item| item == &x.name) {
+                let (check_renaming, not_listed, set_name) = exclude_from_base.iter().fold(
+                    (false, true, None),
+                    |(mut it_remains, mut not_listed, mut new_name), item| {
+                        match item {
+                            OutputData {
+                                set_name,
+                                moving: Moving::Remain,
+                                source: Source::AtBasePrices(name),
+                                ..
+                            } if *name == x.name => {
+                                it_remains = true;
+                                not_listed = false;
+                                new_name = Some(*name)
+                            }
+                            OutputData {
+                                source: Source::AtBasePrices(name),
+                                ..
+                            } if *name == x.name => not_listed = false,
+                            _ => (),
+                        }
+
+                        (it_remains, not_listed, new_name)
+                    },
+                );
+
+                if check_renaming || not_listed {
                     let columns_min = x.base_price.iter().map(Option::is_some).count();
 
-                    if columns_min > 0 {
-                        let outputdata = OutputData {
-                            set_name: None,
-                            moving: Moving::Remain,
-                            expected_columns: columns_min,
-                            source: Source::AtBasePrices(&x.name),
-                        };
-                        acc.0.push(outputdata)
-                    }
+                    let outputdata = OutputData {
+                        set_name,
+                        moving: Moving::Remain,
+                        expected_columns: columns_min,
+                        source: Source::AtBasePrices(&x.name),
+                    };
+                    acc.0.push(outputdata)
                 }
 
                 acc
