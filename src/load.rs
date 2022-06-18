@@ -3,21 +3,21 @@ use crate::transform::Act;
 #[derive(Debug, Clone)]
 pub struct OutputData<'a> {
     pub set_name: Option<&'a str>,
-    // pub change_location: Parts,
-    pub print_quantity: Option<usize>,
-    pub source: DataSource<'a>,
+    pub moving: Moving,
+    pub expected_columns: usize,
+    pub source: Source<'a>,
 }
 // Четыре вида данных на выходе: в готовом виде в шапке, в готов виде в итогах акта (2 варанта), и нет готовых (нужно расчитать программой):
 #[derive(Debug, Clone, PartialEq)]
 
-enum Parts {
-    First(usize),
-    Curr,
-    Base,
+pub enum Moving {
+    Remain,
+    Move,
+    Delete,
 }
 
 #[derive(Debug, Clone)]
-pub enum DataSource<'a> {
+pub enum Source<'a> {
     InTableHeader(&'static str),
     AtCurrPrices(&'a str),
     AtBasePrices(&'a str),
@@ -39,9 +39,9 @@ impl<'a> PrintPart<'a> {
         self.total_col
     }
     fn count_col(vector: &[OutputData]) -> usize {
-        vector.iter().fold(0, |acc, copy| match copy.print_quantity {
-            Some(x) => acc + x,
-            None => acc,
+        vector.iter().fold(0, |acc, copy| match copy.moving {
+            Moving::Delete => acc,
+            _ => acc + copy.expected_columns,
         })
     }
 }
@@ -49,13 +49,14 @@ impl<'a> PrintPart<'a> {
 fn PrintPart_test() {
     #[rustfmt::skip]
         let vec_to_test = vec![
-            OutputData{set_name: None,           print_quantity: Some(1),  source: DataSource::InTableHeader("Исполнитель")},
-            OutputData{set_name: Some("Глава"),  print_quantity: Some(11), source: DataSource::Calculate},
-            OutputData{set_name: None,           print_quantity: Some(0),  source: DataSource::InTableHeader("Объект")},
+            OutputData{set_name: None,                           moving: Moving::Remain, expected_columns: 1, source: Source::InTableHeader("Объект")},
+            OutputData{set_name: None,                           moving: Moving::Move,   expected_columns: 1, source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)")},
+            OutputData{set_name: Some("РЕНЕЙМ................"), moving: Moving::Remain, expected_columns: 1, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
+            OutputData{set_name: Some("УДАЛИТЬ..............."), moving: Moving::Delete, expected_columns: 1, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
         ];
     let printpart = PrintPart::new(vec_to_test);
 
-    assert_eq!(12, printpart.get_number_of_columns());
+    assert_eq!(3, printpart.get_number_of_columns());
 }
 
 pub struct Report<'a> {
@@ -77,26 +78,26 @@ impl<'a> Report<'a> {
 
         #[rustfmt::skip]
         let vec_1 = vec![
-            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Исполнитель")},
-            OutputData{set_name: Some("Глава"),                         print_quantity: Some(1), source: DataSource::Calculate},
-            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Объект")},
-            OutputData{set_name: None,                                                        print_quantity: Some(1), source: DataSource::AtCurrPrices("Стоимость материальных ресурсов (всего)")},
-            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Договор №")},
-            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Договор дата")},
-            OutputData{set_name: Some("Роботизация машин"),                                   print_quantity: Some(1), source: DataSource::AtBasePrices("Эксплуатация машин")},
-            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Смета №")},
-            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Смета наименование")},
-            OutputData{set_name: Some("По смете в ц.2000г."),           print_quantity: Some(1), source: DataSource::Calculate},
-            OutputData{set_name: Some("Выполнение работ в ц.2000г."),   print_quantity: Some(1), source: DataSource::Calculate},
-            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Акт №")},
-            OutputData{set_name: Some("Акт дата"),                      print_quantity: Some(1), source: DataSource::Calculate},
-            OutputData{set_name: Some("Отчетный период начало"),        print_quantity: Some(1), source: DataSource::Calculate},
-            OutputData{set_name: Some("Отчетный период окончание"),     print_quantity: Some(1), source: DataSource::Calculate},
-            OutputData{set_name: None,                                  print_quantity: Some(1), source: DataSource::InTableHeader("Метод расчета")},
-            OutputData{set_name: Some("Ссылка на папку"),               print_quantity: Some(1), source: DataSource::Calculate},
-            OutputData{set_name: Some("Ссылка на файл"),                print_quantity: Some(1), source: DataSource::Calculate},
-            OutputData{set_name: None,                                                        print_quantity: None,    source: DataSource::AtCurrPrices("Итого с К = 1")},
-            OutputData{set_name: Some("Итого с К = 9999999999999999"),                        print_quantity: Some(1), source: DataSource::AtBasePrices("Итого с К = 1")},
+            OutputData{set_name: None,                                  moving: Moving::Remain, expected_columns: 1, source: Source::InTableHeader("Исполнитель")},
+            OutputData{set_name: Some("Глава"),                         moving: Moving::Remain, expected_columns: 1, source: Source::Calculate},
+            OutputData{set_name: None,                                  moving: Moving::Remain, expected_columns: 1, source: Source::InTableHeader("Объект")},
+            OutputData{set_name: None,                                                        moving: Moving::Move, expected_columns: 1, source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)")},
+            OutputData{set_name: None,                                  moving: Moving::Remain, expected_columns: 1, source: Source::InTableHeader("Договор №")},
+            OutputData{set_name: None,                                  moving: Moving::Remain, expected_columns: 1, source: Source::InTableHeader("Договор дата")},
+            OutputData{set_name: Some("Роботизация машин"),                                   moving: Moving::Move, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин")},
+            OutputData{set_name: None,                                  moving: Moving::Remain, expected_columns: 1, source: Source::InTableHeader("Смета №")},
+            OutputData{set_name: None,                                  moving: Moving::Remain, expected_columns: 1, source: Source::InTableHeader("Смета наименование")},
+            OutputData{set_name: Some("По смете в ц.2000г."),           moving: Moving::Remain, expected_columns: 1, source: Source::Calculate},
+            OutputData{set_name: Some("Выполнение работ в ц.2000г."),   moving: Moving::Remain, expected_columns: 1, source: Source::Calculate},
+            OutputData{set_name: None,                                  moving: Moving::Remain, expected_columns: 1, source: Source::InTableHeader("Акт №")},
+            OutputData{set_name: Some("Акт дата"),                      moving: Moving::Remain, expected_columns: 1, source: Source::Calculate},
+            OutputData{set_name: Some("Отчетный период начало"),        moving: Moving::Remain, expected_columns: 1, source: Source::Calculate},
+            OutputData{set_name: Some("Отчетный период окончание"),     moving: Moving::Remain, expected_columns: 1, source: Source::Calculate},
+            OutputData{set_name: None,                                  moving: Moving::Remain, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
+            OutputData{set_name: Some("Ссылка на папку"),               moving: Moving::Remain, expected_columns: 1, source: Source::Calculate},
+            OutputData{set_name: Some("Ссылка на файл"),                moving: Moving::Remain, expected_columns: 1, source: Source::Calculate},
+            OutputData{set_name: Some("РЕНЕЙМ................"),                               moving: Moving::Remain, expected_columns: 1, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
+            OutputData{set_name: Some("УДАЛИТЬ..............."),                               moving: Moving::Delete, expected_columns: 1, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
         ];
         // В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
         // В PART_1 мы перечислили, то чему хотели задать порядок заранее, но есть столбцы, где мы хотим оставить порядок, который существует в актах.
@@ -121,11 +122,11 @@ impl<'a> Report<'a> {
             part_1
                 .iter()
                 .fold((Vec::new(), Vec::new()), |mut acc, outputdata| {
-                    if let DataSource::AtBasePrices(default_name) = outputdata.source {
+                    if let Source::AtBasePrices(default_name) = outputdata.source {
                         acc.0.push(default_name)
                     };
 
-                    if let DataSource::AtCurrPrices(default_name) = outputdata.source {
+                    if let Source::AtCurrPrices(default_name) = outputdata.source {
                         acc.1.push(default_name)
                     };
                     acc
@@ -140,8 +141,9 @@ impl<'a> Report<'a> {
                     if columns_min > 0 {
                         let outputdata = OutputData {
                             set_name: None,
-                            print_quantity: Some(columns_min),
-                            source: DataSource::AtBasePrices(&x.name),
+                            moving: Moving::Remain,
+                            expected_columns: columns_min,
+                            source: Source::AtBasePrices(&x.name),
                         };
                         acc.0.push(outputdata)
                     }

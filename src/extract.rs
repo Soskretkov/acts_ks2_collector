@@ -74,7 +74,6 @@ impl Sheet {
         search_reference_points: &[(usize, Required, &'static str)],
         expected_sum_of_requir_col: usize,
     ) -> Result<Sheet, &'static str> {
-
         let data = match workbook.data.worksheet_range(sheetname) {
             Some(x) => x.unwrap(),
             None => return Err("Отсуствует запрошенный лист"),
@@ -138,14 +137,12 @@ impl Sheet {
             None => return Err("Не удалось получить начало диапазона листа"),
         };
 
-        
-            Ok(Sheet {
-                path: workbook.path.clone(),
-                sheetname,
-                data,
-                search_points,
-                range_start,
-            })
-        }
+        Ok(Sheet {
+            path: workbook.path.clone(),
+            sheetname,
+            data,
+            search_points,
+            range_start,
+        })
     }
-
+}
