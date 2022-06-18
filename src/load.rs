@@ -117,7 +117,7 @@ impl<'a> Report<'a> {
             part_3_curr,
         })
     }
-    fn other_parts<'b>(sample: &'b Act, part_1: &[OutputData]) {
+    fn other_parts<'b>(sample: &'b Act, part_1: &[OutputData<'a>]) -> Vec<OutputData<'a>> {
         let exclude_from_base = part_1
             .iter()
             .filter(|outputdata| match outputdata.source {
@@ -136,7 +136,7 @@ impl<'a> Report<'a> {
 
         let (part_2_base, part_3_curr) = sample.data_of_totals.iter().fold(
             (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
-            |mut acc, x| {
+            |mut acc, smpl_totalsrow| {
                 let (check_renaming, not_listed, set_name) = exclude_from_base.iter().fold(
                     (false, true, None),
                     |(mut it_remains, mut not_listed, mut new_name), item| {
@@ -146,7 +146,7 @@ impl<'a> Report<'a> {
                                 moving: Moving::Remain,
                                 source: Source::AtBasePrices(name),
                                 ..
-                            } if *name == x.name => {
+                            } if *name == smpl_totalsrow.name => {
                                 it_remains = true;
                                 not_listed = false;
                                 new_name = Some(*name)
@@ -154,7 +154,7 @@ impl<'a> Report<'a> {
                             OutputData {
                                 source: Source::AtBasePrices(name),
                                 ..
-                            } if *name == x.name => not_listed = false,
+                            } if *name == smpl_totalsrow.name => not_listed = false,
                             _ => (),
                         }
 
@@ -163,13 +163,13 @@ impl<'a> Report<'a> {
                 );
 
                 if check_renaming || not_listed {
-                    let columns_min = x.base_price.iter().map(Option::is_some).count();
+                    let columns_min = smpl_totalsrow.base_price.iter().map(Option::is_some).count();
 
                     let outputdata = OutputData {
                         set_name,
                         moving: Moving::Remain,
                         expected_columns: columns_min,
-                        source: Source::AtBasePrices(&x.name),
+                        source: Source::AtBasePrices(&smpl_totalsrow.name),
                     };
                     acc.0.push(outputdata)
                 }
@@ -177,6 +177,7 @@ impl<'a> Report<'a> {
                 acc
             },
         );
+        part_2_base
     }
 
     pub fn _write_as_sample(_book: xlsxwriter::Workbook) {}
