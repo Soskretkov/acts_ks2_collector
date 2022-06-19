@@ -33,7 +33,7 @@ fn main() {
 
 
     // println!("{:#?}", vector_of_acts[0].data_of_totals);
-    println!("{:#?}", report.part_2_base);
+    println!("{:#?}", report.part_3_curr);
 
     // let (_part_2_fst_fls_base, _part_4_fst_fls_curr) = load::first_file_data_names(&vector_of_acts[0].data_of_totals);
     //   println!("{:#?}", _part_2_fst_fls_base);

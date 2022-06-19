@@ -109,11 +109,11 @@ impl<'a> Report<'a> {
         // Другими словами, структура нашего отчета воспроизведет в столбцах порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
         // В итогах присутсвует два вида данных: базовые и текущие цены, таким образом получается отчет будет написан из 3 частей.
 
-        let vec_2 = Self::other_parts(sample, &vec_1);
+        let (vec_2, vec_3) = Self::other_parts(sample, &vec_1);
 
-        let part_1_just = PrintPart::new(vec_1.clone());
+        let part_1_just = PrintPart::new(vec_1);
         let part_2_base = PrintPart::new(vec_2);
-        let part_3_curr = PrintPart::new(vec_1);
+        let part_3_curr = PrintPart::new(vec_3);
 
         Ok(Report {
             book: None,
@@ -122,7 +122,10 @@ impl<'a> Report<'a> {
             part_3_curr,
         })
     }
-    fn other_parts(sample: &'a Act, part_1: &[OutputData<'a>]) -> Vec<OutputData<'a>> {
+    fn other_parts(
+        sample: &'a Act,
+        part_1: &[OutputData<'a>],
+    ) -> (Vec<OutputData<'a>>, Vec<OutputData<'a>>) {
         let exclude_from_base = part_1
             .iter()
             .filter(|outputdata| matches!(outputdata.source, Source::AtBasePrices(_)))
@@ -136,51 +139,93 @@ impl<'a> Report<'a> {
         let (part_2_base, part_3_curr) = sample.data_of_totals.iter().fold(
             (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
             |mut acc, smpl_totalsrow| {
-                let (check_renaming, not_listed, new_name) = exclude_from_base.iter().fold(
-                    (false, true, None),
-                    |(mut it_remains, mut not_listed, mut new_name), item| {
-                        match item {
-                            OutputData {
-                                set_name,
-                                moving: Moving::Remain,
-                                source: Source::AtBasePrices(name),
-                                ..
-                            } if *name == smpl_totalsrow.name => {
-                                it_remains = true;
-                                not_listed = false;
-                                new_name = *set_name;
+                let (check_renaming_base, not_listed_base, new_name_base) =
+                    exclude_from_base.iter().fold(
+                        (false, true, None),
+                        |(mut it_remains, mut not_listed, mut new_name), item| {
+                            match item {
+                                OutputData {
+                                    set_name,
+                                    moving: Moving::Remain,
+                                    source: Source::AtBasePrices(name),
+                                    ..
+                                } if *name == smpl_totalsrow.name => {
+                                    it_remains = true;
+                                    not_listed = false;
+                                    new_name = *set_name;
+                                }
+                                OutputData {
+                                    source: Source::AtBasePrices(name),
+                                    ..
+                                } if *name == smpl_totalsrow.name => not_listed = false,
+                                _ => (),
                             }
-                            OutputData {
-                                source: Source::AtBasePrices(name),
-                                ..
-                            } if *name == smpl_totalsrow.name => not_listed = false,
-                            _ => (),
-                        }
 
-                        (it_remains, not_listed, new_name)
-                    },
-                );
+                            (it_remains, not_listed, new_name)
+                        },
+                    );
 
-                if check_renaming || not_listed {
+                if check_renaming_base || not_listed_base {
                     let columns_min = smpl_totalsrow
                         .base_price
                         .iter()
                         .map(Option::is_some)
                         .count();
 
-                    let outputdata = OutputData {
-                        set_name: new_name,
+                    let outputdata_base = OutputData {
+                        set_name: new_name_base,
                         moving: Moving::Already,
                         expected_columns: columns_min,
                         source: Source::AtBasePrices(&smpl_totalsrow.name),
                     };
-                    acc.0.push(outputdata)
+                    acc.0.push(outputdata_base)
                 }
 
+                let (check_renaming_curr, not_listed_curr, new_name_curr) =
+                    exclude_from_curr.iter().fold(
+                        (false, true, None),
+                        |(mut it_remains, mut not_listed, mut new_name), item| {
+                            match item {
+                                OutputData {
+                                    set_name,
+                                    moving: Moving::Remain,
+                                    source: Source::AtCurrPrices(name),
+                                    ..
+                                } if *name == smpl_totalsrow.name => {
+                                    it_remains = true;
+                                    not_listed = false;
+                                    new_name = *set_name;
+                                }
+                                OutputData {
+                                    source: Source::AtCurrPrices(name),
+                                    ..
+                                } if *name == smpl_totalsrow.name => not_listed = false,
+                                _ => (),
+                            }
+
+                            (it_remains, not_listed, new_name)
+                        },
+                    );
+
+                if check_renaming_curr || not_listed_curr {
+                    let columns_min = smpl_totalsrow
+                        .current_price
+                        .iter()
+                        .map(Option::is_some)
+                        .count();
+
+                    let outputdata_curr = OutputData {
+                        set_name: new_name_curr,
+                        moving: Moving::Already,
+                        expected_columns: columns_min,
+                        source: Source::AtCurrPrices(&smpl_totalsrow.name),
+                    };
+                    acc.1.push(outputdata_curr)
+                }
                 acc
             },
         );
-        part_2_base
+        (part_2_base, part_3_curr)
     }
 
     pub fn _write_as_sample(_book: xlsxwriter::Workbook) {}
