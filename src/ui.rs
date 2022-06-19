@@ -17,13 +17,6 @@ pub fn session() -> (String, String) {
         let len_path = path.chars().count();
 
         match path {
-            // x if len_path < 6
-            //     && x.matches(['h', 'e', 'l', 'p', 'р', 'у', 'д', 'з']).count() > 2 =>
-            // {
-            //     show_help();
-            //     thread::sleep(Duration::from_secs(1));
-            //     continue;
-            // }
             x if len_path < 9
                 && x.matches([
                     'd', 'e', 't', 'a', 'i', 'l', 's', 'в', 'у', 'е', 'ф', 'ш', 'д', 'ы',

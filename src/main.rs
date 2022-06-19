@@ -4,7 +4,7 @@ mod load;
 mod transform;
 mod ui;
 use crate::extract::{Book, Sheet, SEARCH_REFERENCE_POINTS};
-// use crate::load::{DataSource, PART_1_REPORT};
+use crate::load::{Report};
 use crate::transform::Act;
 
 fn main() {
@@ -28,8 +28,12 @@ fn main() {
     let act2 = act.clone();
     let act3 = act.clone();
     let vector_of_acts: Vec<Act> = vec![act1, act2, act3];
+    
+    let report = Report::set_sample(&vector_of_acts[0]).unwrap();
+
 
     // println!("{:#?}", vector_of_acts[0].data_of_totals);
+    println!("{:#?}", report.part_2_base);
 
     // let (_part_2_fst_fls_base, _part_4_fst_fls_curr) = load::first_file_data_names(&vector_of_acts[0].data_of_totals);
     //   println!("{:#?}", _part_2_fst_fls_base);
