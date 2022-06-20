@@ -7,20 +7,20 @@ pub struct Act {
     pub path: String,
     pub sheetname: &'static str,
     pub names_of_header: &'static [DesiredData; 15],
-    pub data_of_header: Vec<Option<DateVariant>>,
+    pub data_of_header: Vec<Option<DataVariant>>,
     pub data_of_totals: Vec<TotalsRow>,
 }
 
 impl<'a> Act {
     pub fn new(sheet: Sheet) -> Result<Act, String> {
         let header_addresses = Self::cells_addreses_in_header(&sheet.search_points);
-        let data_of_header: Vec<Option<DateVariant>> = header_addresses
+        let data_of_header: Vec<Option<DataVariant>> = header_addresses
             .iter()
             .map(|address| match address {
                 Some(x) => match &sheet.data[*x] {
-                    DataType::DateTime(x) => Some(DateVariant::Float(*x)),
-                    DataType::Float(x) => Some(DateVariant::Float(*x)),
-                    DataType::String(x) => Some(DateVariant::String(x.to_owned())),
+                    DataType::DateTime(x) => Some(DataVariant::Float(*x)),
+                    DataType::Float(x) => Some(DataVariant::Float(*x)),
+                    DataType::String(x) => Some(DataVariant::String(x.to_owned())),
                     _ => None,
                 },
                 None => None,
@@ -143,7 +143,7 @@ pub struct TotalsRow {
 }
 
 #[derive(Debug, Clone)]
-pub enum DateVariant {
+pub enum DataVariant {
     String(String),
     Float(f64),
 }

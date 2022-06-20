@@ -1,10 +1,10 @@
-// use xlsxwriter::Workbook;
+use xlsxwriter::Workbook;
 mod extract;
 mod load;
 mod transform;
 mod ui;
 use crate::extract::{Book, Sheet, SEARCH_REFERENCE_POINTS};
-use crate::load::{Report};
+use crate::load::Report;
 use crate::transform::Act;
 
 fn main() {
@@ -23,47 +23,54 @@ fn main() {
     .unwrap();
 
     let act = Act::new(sheet).unwrap();
+    let vector_of_acts: Vec<Act> = vec![act.clone(), act.clone(), act.clone()];
 
-    let act1 = act.clone();
-    let act2 = act.clone();
-    let act3 = act.clone();
-    let vector_of_acts: Vec<Act> = vec![act1, act2, act3];
-    
-    let report = Report::set_sample(&vector_of_acts[0]).unwrap();
+    let wb = Workbook::new("Test.xlsx");
+    let mut report = Report::set_sample(wb, &vector_of_acts[0]).unwrap();
+    report.write(&vector_of_acts[0]);
+    let wb_2 = report.stop_writing();
+    let _ = wb_2.unwrap().close();
+
+    // println!("{:#?}", report.part_1_just);
+    // println!("{:#?}", report.part_3_curr);
+
+
+
+
+
 
 
     // println!("{:#?}", vector_of_acts[0].data_of_totals);
-    println!("{:#?}", report.part_3_curr);
 
     // let (_part_2_fst_fls_base, _part_4_fst_fls_curr) = load::first_file_data_names(&vector_of_acts[0].data_of_totals);
     //   println!("{:#?}", _part_2_fst_fls_base);
     //   println!("{:#?}", _part_4_fst_fls_curr);
 
     // Печать шапки
-    let mut header = act
-        .names_of_header
-        .iter()
-        .zip(act.data_of_header.iter().map(|x| {
-            x.as_ref()
-                .unwrap_or(&transform::DateVariant::String("".to_string()))
-                .clone()
-        }));
+    // let mut header = act
+    //     .names_of_header
+    //     .iter()
+    //     .zip(act.data_of_header.iter().map(|x| {
+    //         x.as_ref()
+    //             .unwrap_or(&transform::DateVariant::String("".to_string()))
+    //             .clone()
+    //     }));
 
     // for print in header {
     //      println!("{}:  {:?}", print.0.content, print.1);
     // }
-    let print = header.nth(2).unwrap();
-    println!("{}:  {:?}", print.0.name, print.1);
+    // let print = header.nth(2).unwrap();
+    // println!("{}:  {:?}", print.0.name, print.1);
 
-    // Печать итогов
-    let summary = act.data_of_totals;
-    let last_row = summary.iter().last().unwrap();
-    println!(
-        "\n{}: базовая - {}; текущая - {}",
-        last_row.name,
-        last_row.base_price[0].unwrap_or(0.),
-        last_row.current_price[0].unwrap_or(0.)
-    );
+    // // Печать итогов
+    // let summary = act.data_of_totals;
+    // let last_row = summary.iter().last().unwrap();
+    // println!(
+    //     "\n{}: базовая - {}; текущая - {}",
+    //     last_row.name,
+    //     last_row.base_price[0].unwrap_or(0.),
+    //     last_row.current_price[0].unwrap_or(0.)
+    // );
 
     // Печать rows Excel
     // let sheet = Sheet::new(
@@ -80,10 +87,4 @@ fn main() {
     // for row in sheet.data.rows().skip(start_of_range.0) {
     //     println!("{:?}", row);
     // }
-
-    // // Пробная запись
-    // let wb = Workbook::new("Test.xlsx");
-    // let mut sh1 = wb.add_worksheet(Some("Лист1")).unwrap();
-    // sh1.write_string(0, 0, "Red text", None).unwrap();
-    // wb.close().unwrap();
 }

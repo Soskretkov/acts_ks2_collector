@@ -1,4 +1,5 @@
-use crate::transform::Act;
+use crate::transform::{Act, DataVariant};
+use xlsxwriter::{Workbook, Worksheet};
 
 #[derive(Debug, Clone)]
 pub struct OutputData<'a> {
@@ -28,6 +29,7 @@ pub enum Source<'a> {
 #[derive(Debug)]
 pub struct PrintPart<'a> {
     vector: Vec<OutputData<'a>>,
+    last_row: usize,
     total_col: usize,
 }
 
@@ -35,7 +37,7 @@ impl<'a> PrintPart<'a> {
     pub fn new(vector: Vec<OutputData>) -> PrintPart {
         let total_col = Self::count_col(&vector);
 
-        PrintPart { vector, total_col }
+        PrintPart { vector, last_row: 0, total_col }
     }
     pub fn get_number_of_columns(&self) -> usize {
         self.total_col
@@ -70,7 +72,7 @@ pub struct Report<'a> {
 }
 
 impl<'a> Report<'a> {
-    pub fn set_sample(sample: &'a Act) -> Result<Report, &'static str> {
+    pub fn set_sample(wb: xlsxwriter::Workbook, sample: &'a Act) -> Result<Report, &'static str> {
         //-> Report
         // Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
         // но если какой-то акт имеет 16, 18, 0 или, скажем, 40 строк в итогах, то нужна какая-то логика, чтобы соотнести эти 40 строк одного акта
@@ -116,7 +118,7 @@ impl<'a> Report<'a> {
         let part_3_curr = PrintPart::new(vec_3);
 
         Ok(Report {
-            book: None,
+            book: Some(wb),
             part_1_just,
             part_2_base,
             part_3_curr,
@@ -228,6 +230,34 @@ impl<'a> Report<'a> {
         (part_2_base, part_3_curr)
     }
 
-    pub fn _write_as_sample(_book: xlsxwriter::Workbook) {}
-    pub fn _format() {}
+    pub fn write(&mut self, act: &Act) {
+        let mut sh = self
+            .book
+            .as_mut()
+            .unwrap()
+            .add_worksheet(Some("Result"))
+            .unwrap();
+        // sh.write_string(0, 0, "Red text", None).unwrap();
+        self.part_1_just
+            .vector
+            .iter()
+            .fold((1, 0), |first_col, item| {
+                match item.source {
+                    Source::InTableHeader(x) => {
+                        Self::write_header(&x, &act.data_of_header, &mut sh)
+                    }
+                    Source::AtBasePrices(x) => (),
+                    Source::AtCurrPrices(x) => (),
+                    Source::Calculate => (),
+                }
+
+                first_col
+            });
+    }
+    fn write_header(name: &str, datavariant: &Vec<Option<DataVariant>>, sh: &mut Worksheet) {}
+
+    pub fn stop_writing(&mut self) -> Option<Workbook> {
+        let x = self.book.take();
+        x
+    }
 }
