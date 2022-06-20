@@ -20,7 +20,9 @@ impl<'a> Act {
                 Some(x) => match &sheet.data[*x] {
                     DataType::DateTime(x) => Some(DataVariant::Float(*x)),
                     DataType::Float(x) => Some(DataVariant::Float(*x)),
-                    DataType::String(x) => Some(DataVariant::String(x.to_owned())),
+                    DataType::String(x) => {
+                        Some(DataVariant::String(x.trim().replace("\r\n", "").to_owned()))
+                    }
                     _ => None,
                 },
                 None => None,
@@ -104,7 +106,12 @@ impl<'a> Act {
                     //Если пустых ячеек вместо имени еще не встречалось, то собираем данные независимо от наличия цены.
                     //Ситуация меняется если встретилось первое пустое имя: теперь потребуется и имя и цена (перестраховка на случай случайных пустых строк)
                     if !found_blank_row || base_price.is_float() || current_price.is_float() {
-                        let row_name = wrapped_row_name.get_string().unwrap().to_string(); //unwrap не обрабатывать: выше проверка name.is_string
+                        let row_name = wrapped_row_name
+                            .get_string()
+                            .unwrap()
+                            .trim()
+                            .replace("\r\n", "")
+                            .to_string(); //unwrap не обрабатывать: выше проверка name.is_string
 
                         match acc.iter_mut().find(|object| object.name == row_name) {
                             Some(x) => {

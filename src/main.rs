@@ -32,7 +32,7 @@ fn main() {
     let _ = wb_2.unwrap().close();
 
     // println!("{:#?}", report.part_1_just);
-    // println!("{:#?}", report.part_3_curr);
+    println!("{:#?}", report.part_3_curr);
 
 
 
