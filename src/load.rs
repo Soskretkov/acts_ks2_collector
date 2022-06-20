@@ -29,7 +29,6 @@ pub enum Source<'a> {
 #[derive(Debug)]
 pub struct PrintPart<'a> {
     vector: Vec<OutputData<'a>>,
-    last_row: usize,
     total_col: usize,
 }
 
@@ -37,7 +36,7 @@ impl<'a> PrintPart<'a> {
     pub fn new(vector: Vec<OutputData>) -> PrintPart {
         let total_col = Self::count_col(&vector);
 
-        PrintPart { vector, last_row: 0, total_col }
+        PrintPart { vector, total_col }
     }
     pub fn get_number_of_columns(&self) -> usize {
         self.total_col
@@ -69,6 +68,7 @@ pub struct Report<'a> {
     pub part_1_just: PrintPart<'a>,
     pub part_2_base: PrintPart<'a>,
     pub part_3_curr: PrintPart<'a>,
+    pub empty_row: u32,
 }
 
 impl<'a> Report<'a> {
@@ -122,6 +122,7 @@ impl<'a> Report<'a> {
             part_1_just,
             part_2_base,
             part_3_curr,
+            empty_row: 0,
         })
     }
     fn other_parts(
@@ -237,24 +238,35 @@ impl<'a> Report<'a> {
             .unwrap()
             .add_worksheet(Some("Result"))
             .unwrap();
-        // sh.write_string(0, 0, "Red text", None).unwrap();
+
         self.part_1_just
             .vector
             .iter()
-            .fold((1, 0), |first_col, item| {
+            .fold(0_u16, |first_col, item| {
                 match item.source {
                     Source::InTableHeader(x) => {
-                        Self::write_header(&x, &act.data_of_header, &mut sh)
+                        Self::write_header(&act, &x, &mut sh, self.empty_row, first_col)
                     }
                     Source::AtBasePrices(x) => (),
                     Source::AtCurrPrices(x) => (),
                     Source::Calculate => (),
                 }
-
-                first_col
+                first_col + item.expected_columns as u16
             });
     }
-    fn write_header(name: &str, datavariant: &Vec<Option<DataVariant>>, sh: &mut Worksheet) {}
+
+    fn write_header(act: &Act, words: &str, sh: &mut Worksheet, row: u32, col: u16) {
+        let index = act.names_of_header.iter().position(|name| name.name == words).expect(&format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", words));
+        dbg!(&index);
+        dbg!(&words);
+        let datavariant = &act.data_of_header[index];
+
+        let print = match datavariant {
+            Some(DataVariant::String(x)) => sh.write_string(row, col, x, None).unwrap(),
+            Some(DataVariant::Float(x)) => sh.write_number(row, col, *x, None).unwrap(),
+            None => (),
+        };
+    }
 
     pub fn stop_writing(&mut self) -> Option<Workbook> {
         let x = self.book.take();
