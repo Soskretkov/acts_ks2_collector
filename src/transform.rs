@@ -20,9 +20,7 @@ impl<'a> Act {
                 Some(x) => match &sheet.data[*x] {
                     DataType::DateTime(x) => Some(DataVariant::Float(*x)),
                     DataType::Float(x) => Some(DataVariant::Float(*x)),
-                    DataType::String(x) => {
-                        Some(DataVariant::String(x.trim().replace("\r\n", "").to_owned()))
-                    }
+                    DataType::String(x) => Some(DataVariant::String(x.trim().replace("\r\n", ""))),
                     _ => None,
                 },
                 None => None,
@@ -110,8 +108,7 @@ impl<'a> Act {
                             .get_string()
                             .unwrap()
                             .trim()
-                            .replace("\r\n", "")
-                            .to_string(); //unwrap не обрабатывать: выше проверка name.is_string
+                            .replace("\r\n", "");
 
                         match acc.iter_mut().find(|object| object.name == row_name) {
                             Some(x) => {

@@ -11,7 +11,7 @@ fn main() {
     // let (_path, _sh_name) = ui::session();
 
     let path = r"C:\Users\User\rust\acts_ks2_etl\f.xlsm";
-    let mut wb = Book::new(&path).expect(&("Не удалось считать файл".to_owned() + &path));
+    let mut wb = Book::new(path).expect(&("Не удалось считать файл".to_owned() + path));
 
     let sheet = Sheet::new(
         &mut wb,
@@ -32,6 +32,7 @@ fn main() {
 
     // println!("{:#?}", report.part_1_just);
     // println!("{:#?}", report.part_2_base);
+    // println!("{:#?}", report.part_3_curr);
 
     // println!("{:#?}", vector_of_acts[0].data_of_totals);
 

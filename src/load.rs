@@ -12,7 +12,7 @@ pub struct OutputData<'a> {
 
 pub enum Moving {
     NO,
-    АnotherVector,
+    AnotherVector,
     Move,
     Delete,
 }
@@ -50,8 +50,7 @@ impl<'a> PrintPart<'a> {
                     return Some(counter);
                 }
                 OutputData {
-                    moving: Moving::NO,
-                    ..
+                    moving: Moving::NO, ..
                 } => {
                     counter += outputdata.expected_columns;
                 }
@@ -68,11 +67,13 @@ impl<'a> PrintPart<'a> {
     }
 
     fn count_col(vector: &[OutputData]) -> u16 {
-        vector.iter().fold(0, |acc, outputdata| match outputdata.moving {
-            Moving::NO => acc + outputdata.expected_columns,
-            Moving::Move => acc + outputdata.expected_columns,
-            _ => acc,
-        })
+        vector
+            .iter()
+            .fold(0, |acc, outputdata| match outputdata.moving {
+                Moving::NO => acc + outputdata.expected_columns,
+                Moving::Move => acc + outputdata.expected_columns,
+                _ => acc,
+            })
     }
 }
 #[test]
@@ -82,7 +83,7 @@ fn PrintPart_test() {
             OutputData{rename: None,                           moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Объект")},
             OutputData{rename: None,                           moving: Moving::Move, expected_columns: 2, source: Source::AtCurrPrices("Эксплуатация машин")},
             OutputData{rename: None,                           moving: Moving::Move, expected_columns: 3, source: Source::AtBasePrices("Эксплуатация машин")},
-            OutputData{rename: Some("РЕНЕЙМ................"), moving: Moving::АnotherVector, expected_columns: 4, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
+            OutputData{rename: Some("РЕНЕЙМ................"), moving: Moving::AnotherVector, expected_columns: 4, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
             OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::Delete, expected_columns: 5, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
             OutputData{rename: None,                           moving: Moving::Move,   expected_columns: 6, source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)")},
         ];
@@ -123,7 +124,7 @@ impl<'a> Report<'a> {
             OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Договор №")},
             OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Договор дата")},
             OutputData{rename: None,                                            moving: Moving::Move,   expected_columns: 1, source: Source::AtBasePrices("Стоимость материальных ресурсов (всего)")},
-            OutputData{rename: Some("Восстание машин"),                         moving: Moving::АnotherVector, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин")},
+            OutputData{rename: Some("Восстание машин"),                         moving: Moving::AnotherVector, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин")},
             OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Смета №")},
             OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Смета наименование")},
             OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::NO, expected_columns: 1, source: Source::Calculate("По смете в ц.2000г.")},
@@ -135,7 +136,7 @@ impl<'a> Report<'a> {
             OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
             OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
             OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
-            OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::АnotherVector, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%")},
+            OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::AnotherVector, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%")},
             OutputData{rename: Some("УДАЛИТЬ..............."),                  moving: Moving::Delete, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1")},
         ];
         // В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
@@ -176,95 +177,68 @@ impl<'a> Report<'a> {
         let (part_2_base, part_3_curr) = sample.data_of_totals.iter().fold(
             (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
             |mut acc, smpl_totalsrow| {
-                let (check_renaming_base, not_listed_base, new_name_base) =
-                    exclude_from_base.iter().fold(
-                        (false, true, None),
-                        |(mut it_remains, mut not_listed, mut new_name), item| {
-                            match item {
-                                OutputData {
-                                    rename: set_name,
-                                    moving: Moving::АnotherVector,
-                                    source: Source::AtBasePrices(name),
-                                    ..
-                                } if *name == smpl_totalsrow.name => {
-                                    it_remains = true;
-                                    not_listed = false;
-                                    new_name = *set_name;
-                                }
-                                OutputData {
-                                    source: Source::AtBasePrices(name),
-                                    ..
-                                } if *name == smpl_totalsrow.name => not_listed = false,
-                                _ => (),
-                            }
+                if let Some(x) = Self::get_outputdata(
+                    &exclude_from_base,
+                    &smpl_totalsrow.base_price,
+                    Source::AtBasePrices(&smpl_totalsrow.name),
+                ) {
+                    acc.0.push(x)
+                };
 
-                            (it_remains, not_listed, new_name)
-                        },
-                    );
+                if let Some(y) = Self::get_outputdata(
+                    &exclude_from_curr,
+                    &smpl_totalsrow.current_price,
+                    Source::AtCurrPrices(&smpl_totalsrow.name),
+                ) {
+                    acc.1.push(y)
+                };
 
-                if check_renaming_base || not_listed_base {
-                    let columns_min = smpl_totalsrow
-                        .base_price
-                        .iter()
-                        .map(Option::is_some)
-                        .count() as u16;
-
-                    let outputdata_base = OutputData {
-                        rename: new_name_base,
-                        moving: Moving::NO,
-                        expected_columns: columns_min,
-                        source: Source::AtBasePrices(&smpl_totalsrow.name),
-                    };
-                    acc.0.push(outputdata_base)
-                }
-
-                let (check_renaming_curr, not_listed_curr, new_name_curr) =
-                    exclude_from_curr.iter().fold(
-                        (false, true, None),
-                        |(mut it_remains, mut not_listed, mut new_name), item| {
-                            match item {
-                                OutputData {
-                                    rename: set_name,
-                                    moving: Moving::АnotherVector,
-                                    source: Source::AtCurrPrices(name),
-                                    ..
-                                } if *name == smpl_totalsrow.name => {
-                                    it_remains = true;
-                                    not_listed = false;
-                                    new_name = *set_name;
-                                }
-                                OutputData {
-                                    source: Source::AtCurrPrices(name),
-                                    ..
-                                } if *name == smpl_totalsrow.name => not_listed = false,
-                                _ => (),
-                            }
-
-                            (it_remains, not_listed, new_name)
-                        },
-                    );
-
-                if check_renaming_curr || not_listed_curr {
-                    let columns_min = smpl_totalsrow
-                        .current_price
-                        .iter()
-                        .map(Option::is_some)
-                        .count() as u16;
-
-                    let outputdata_curr = OutputData {
-                        rename: new_name_curr,
-                        moving: Moving::NO,
-                        expected_columns: columns_min,
-                        source: Source::AtCurrPrices(&smpl_totalsrow.name),
-                    };
-                    acc.1.push(outputdata_curr)
-                }
                 acc
             },
         );
         (part_2_base, part_3_curr)
     }
+    fn get_outputdata(
+        exclude: &[&OutputData<'a>],
+        price: &[Option<f64>],
+        src: Source<'a>,
+    ) -> Option<OutputData<'a>> {
+        let (it_another_vector, not_listed, new_name) = exclude.iter().fold(
+            (false, true, None),
+            |(mut it_another_vector, mut not_listed, mut new_name), item| {
+                match item {
+                    OutputData {
+                        rename: set_name,
+                        moving: Moving::AnotherVector,
+                        source,
+                        ..
+                    } if *source == src => {
+                        it_another_vector = true;
+                        not_listed = false;
+                        new_name = *set_name;
+                    }
+                    OutputData { source, .. } if *source == src => not_listed = false,
+                    _ => (),
+                }
 
+                (it_another_vector, not_listed, new_name)
+            },
+        );
+
+        if it_another_vector || not_listed {
+            let columns_min = price.iter().map(Option::is_some).count() as u16;
+
+            let outputdata = OutputData {
+                rename: new_name,
+                moving: Moving::NO,
+                expected_columns: columns_min,
+                source: src,
+            };
+
+            return Some(outputdata);
+        }
+        None
+    }
     pub fn write(&mut self, act: &Act) {
         let mut sh = self
             .book
@@ -278,26 +252,21 @@ impl<'a> Report<'a> {
             .iter()
             .fold(0_u16, |first_col, item| {
                 if let Source::InTableHeader(name) = item.source {
-                    Self::write_header(&act, &name, &mut sh, self.empty_row, first_col)
+                    Self::write_header(act, name, &mut sh, self.empty_row, first_col)
                 }
 
                 if let Source::Calculate(name) = item.source {
-                    Self::write_calculated(&act, &name, &mut sh, self.empty_row, first_col)
+                    Self::write_calculated(act, name, &mut sh, self.empty_row, first_col)
                 }
                 first_col + item.expected_columns
             });
 
-        for row in act.data_of_totals.iter() {
-
-
-
-
-        }
+        // for row in act.data_of_totals.iter() {}
     }
     fn write_totals(part: &mut PrintPart<'a>, source: Source<'a>, expected_columns: u16) {}
 
     fn write_header(act: &Act, name: &str, sh: &mut Worksheet, row: u32, col: u16) {
-        let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).expect(&format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name));
+        let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap_or_else(|| panic!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name));
         let datavariant = &act.data_of_header[index];
 
         if let Some(DataVariant::String(insert)) = datavariant {
@@ -312,18 +281,18 @@ impl<'a> Report<'a> {
     fn write_calculated(act: &Act, name: &str, sh: &mut Worksheet, row: u32, col: u16) {
         match name {
             "Глава" => loop {
-                let index_1 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава").expect(&format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава\" обязательно должна быть в DESIRED_DATA_ARRAY"));
-                let index_2 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава наименование").expect(&format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY"));
+                let index_1 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава").unwrap_or_else(|| panic!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава\" обязательно должна быть в DESIRED_DATA_ARRAY"));
+                let index_2 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава наименование").unwrap_or_else(|| panic!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY"));
                 let datavariant_1 = &act.data_of_header[index_1];
                 let datavariant_2 = &act.data_of_header[index_2];
 
                 let temp_res_1 = match datavariant_1 {
-                    Some(DataVariant::String(word)) if word.len() > 0 => word,
+                    Some(DataVariant::String(word)) if !word.is_empty() => word,
                     _ => break,
                 };
 
                 let temp_res_2 = match datavariant_2 {
-                    Some(DataVariant::String(word)) if word.len() > 0 => word,
+                    Some(DataVariant::String(word)) if !word.is_empty() => word,
                     _ => break,
                 };
 
@@ -332,31 +301,30 @@ impl<'a> Report<'a> {
                 break;
             },
             "По смете в ц.2000г." | "Выполнение работ в ц.2000г." => {
-                let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).expect(&format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name));
+                let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap_or_else(|| panic!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name));
                 let datavariant = &act.data_of_header[index];
 
                 if let Some(DataVariant::String(text)) = datavariant {
                     let _ = text.replace("тыс.", "")
                         .replace("руб.", "")
-                        .replace(",", ".")
-                        .replace(" ", "")
+                        .replace(',', ".")
+                        .replace(' ', "")
                         .parse::<f64>()
                         .map(|insert| sh.write_number(row, col, insert * 1000., None).unwrap());
                 }
             }
             "Ссылка на папку" => {},
             "Ссылка на файл" => {
-                act.path.split("\\").last().map(|file_name| {
+                if let Some(file_name) = act.path.split('\\').last() {
                     let formula = format!("=HYPERLINK(\"{}\", \"{}\")", act.path, file_name);
                     sh.write_formula(row, col, &formula, None).unwrap();
-                });
+                };
             }
             _ => unreachable!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: невозможная попытка записать \"{}\" на лист Excel", name),
         }
     }
 
     pub fn stop_writing(&mut self) -> Option<Workbook> {
-        let x = self.book.take();
-        x
+        self.book.take()
     }
 }
