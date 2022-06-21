@@ -8,17 +8,16 @@ use crate::load::Report;
 use crate::transform::Act;
 
 fn main() {
-    let (_path, _sh_name) = ui::session();
-    let path = String::from("f");
+    // let (_path, _sh_name) = ui::session();
 
-    let path = path + ".xlsm";
+    let path = r"C:\Users\User\rust\acts_ks2_etl\f.xlsm";
     let mut wb = Book::new(&path).expect(&("Не удалось считать файл".to_owned() + &path));
 
     let sheet = Sheet::new(
         &mut wb,
         "Лист1",
         &SEARCH_REFERENCE_POINTS,
-        29, //передается для расчета смещения столбцов. Это сумма номеров столбцов Y-типа в SEARCH_REFERENCE_POINTS: 0 + 0 + 3 + 5 + 9 + 9 + 3.
+        29, //передается для расчета смещения столбцов. Это сумма номеров столбцов Y-типа в DESIRED_DATA_ARRAY: 0 + 0 + 3 + 5 + 9 + 9 + 3.
     )
     .unwrap();
 
@@ -32,13 +31,7 @@ fn main() {
     let _ = wb_2.unwrap().close();
 
     // println!("{:#?}", report.part_1_just);
-    println!("{:#?}", report.part_3_curr);
-
-
-
-
-
-
+    // println!("{:#?}", report.part_2_base);
 
     // println!("{:#?}", vector_of_acts[0].data_of_totals);
 

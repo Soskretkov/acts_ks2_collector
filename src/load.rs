@@ -1,4 +1,5 @@
 use crate::transform::{Act, DataVariant};
+use itertools::fold;
 use xlsxwriter::{Workbook, Worksheet};
 
 #[derive(Debug, Clone)]
@@ -41,6 +42,47 @@ impl<'a> PrintPart<'a> {
     pub fn get_number_of_columns(&self) -> u16 {
         self.total_col
     }
+    
+    pub fn get_column_number(part: &mut PrintPart<'a>, source: Source<'a>) {
+        let mut left_indent: Option<u16> = None;
+        let mut counter_2: u16 = 0;
+
+        for outputdata_2 in part.vector.iter() {
+            if matches!(&outputdata_2.source, source) {
+                left_indent = Some(counter_2);
+                break;
+            }
+            counter_2 += outputdata_2.expected_columns;
+        }
+
+        let mut counter_1: u16 = 0;
+        for outputdata_1 in part.vector.iter() {
+            if let OutputData {
+                moving: Moving::Move,
+                source,
+                ..
+            } = outputdata_1
+            {
+                left_indent = Some(counter_1);
+                break;
+            }
+
+            counter_1 += outputdata_1.expected_columns;
+        }
+        
+        // let new_data = OutputData {
+        //     rename: None,
+        //     moving: Moving::Already,
+        //     expected_columns,
+        //     source: source,
+        // };
+        // part.vector.push(new_data);
+    }
+    
+
+
+
+
     fn count_col(vector: &[OutputData]) -> u16 {
         vector.iter().fold(0, |acc, copy| match copy.moving {
             Moving::Already => acc + copy.expected_columns,
@@ -82,26 +124,26 @@ impl<'a> Report<'a> {
 
         #[rustfmt::skip]
         let vec_1 = vec![
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Исполнитель")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::Calculate("Глава")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Объект")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Договор №")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Договор дата")},
-            OutputData{rename: None,                                      moving: Moving::Move,   expected_columns: 1, source: Source::AtBasePrices("Стоимость материальных ресурсов (всего)")},
-            OutputData{rename: Some("Роботизация машин"),                 moving: Moving::Remain, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Смета №")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Смета наименование")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::Calculate("По смете в ц.2000г.")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::Calculate("Выполнение работ в ц.2000г.")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Акт №")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Акт дата")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Отчетный период начало")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Отчетный период окончание")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
-            OutputData{rename: None,                                  moving: Moving::Already, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
-            OutputData{rename: Some("РЕНЕЙМ................"),            moving: Moving::Remain, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%")},
-            OutputData{rename: Some("УДАЛИТЬ..............."),            moving: Moving::Delete, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Исполнитель")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::Calculate("Глава")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Объект")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Договор №")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Договор дата")},
+            OutputData{rename: None,                                            moving: Moving::Move,   expected_columns: 1, source: Source::AtBasePrices("Стоимость материальных ресурсов (всего)")},
+            OutputData{rename: Some("Восстание машин"),                         moving: Moving::Remain, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Смета №")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Смета наименование")},
+            OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::Already, expected_columns: 1, source: Source::Calculate("По смете в ц.2000г.")},
+            OutputData{rename: Some("Выполнение работ в ц.2000г., руб."),   moving: Moving::Already, expected_columns: 1, source: Source::Calculate("Выполнение работ в ц.2000г.")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Акт №")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Акт дата")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Отчетный период начало")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Отчетный период окончание")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
+            OutputData{rename: None,                                        moving: Moving::Already, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
+            OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::Remain, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%")},
+            OutputData{rename: Some("УДАЛИТЬ..............."),                  moving: Moving::Delete, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1")},
         ];
         // В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
         // В PART_1 мы перечислили, то чему хотели задать порядок заранее, но есть столбцы, где мы хотим оставить порядок, который существует в актах.
@@ -251,7 +293,10 @@ impl<'a> Report<'a> {
                 }
                 first_col + item.expected_columns
             });
+
+        for row in act.data_of_totals.iter() {}
     }
+    // fn write_totals(part: &mut PrintPart<'a>, source: Source<'a>, expected_columns: u16) {
 
     fn write_header(act: &Act, name: &str, sh: &mut Worksheet, row: u32, col: u16) {
         let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).expect(&format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name));
@@ -288,13 +333,28 @@ impl<'a> Report<'a> {
                 sh.write_string(row, col, &temp_res_3, None).unwrap();
                 break;
             },
-            _ => (),
+            "По смете в ц.2000г." | "Выполнение работ в ц.2000г." => {
+                let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).expect(&format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name));
+                let datavariant = &act.data_of_header[index];
+
+                if let Some(DataVariant::String(text)) = datavariant {
+                    let _ = text.replace("тыс.", "")
+                        .replace("руб.", "")
+                        .replace(",", ".")
+                        .replace(" ", "")
+                        .parse::<f64>()
+                        .map(|insert| sh.write_number(row, col, insert * 1000., None).unwrap());
+                }
+            }
+            "Ссылка на папку" => {},
+            "Ссылка на файл" => {
+                act.path.split("\\").last().map(|file_name| {
+                    let formula = format!("=HYPERLINK(\"{}\", \"{}\")", act.path, file_name);
+                    sh.write_formula(row, col, &formula, None).unwrap();
+                });
+            }
+            _ => unreachable!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: невозможная попытка записать \"{}\" на лист Excel", name),
         }
-        //     //     "По смете в ц.2000г." => (),
-        //     //     "Выполнение работ в ц.2000г." => (),
-        //     //     "Ссылка на папку" => (),
-        //     //     "Ссылка на файл" => (),
-        //     //     _ => unreachable!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: невозможная попытка записать \"{}\" на лист Excel", name),
     }
 
     pub fn stop_writing(&mut self) -> Option<Workbook> {
