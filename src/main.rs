@@ -26,7 +26,10 @@ fn main() {
 
     let wb = Workbook::new("Test.xlsx");
     let mut report = Report::new(wb);
-    report.write(&vector_of_acts[0]);
+
+    if let Err(x) = report.write(&vector_of_acts[0]) {
+        println!("{x}");
+    };
     let wb_2 = report.stop_writing();
     let _ = wb_2.unwrap().close();
 

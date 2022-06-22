@@ -1,4 +1,4 @@
-use crate::transform::{Act, DataVariant};
+use crate::transform::{Act, DataVariant, TotalsRow};
 use xlsxwriter::{Format, Workbook, Worksheet};
 
 #[derive(Debug, Clone)]
@@ -133,7 +133,7 @@ impl<'a> Report<'a> {
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период начало")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период окончание")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
+            OutputData{rename: None,                                        moving: Moving::Delete, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
             OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::AnotherVector, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%")},
             OutputData{rename: Some("УДАЛИТЬ..............."),                  moving: Moving::Delete, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1")},
@@ -169,7 +169,7 @@ impl<'a> Report<'a> {
         let mut wrapped_sheet = self
             .book
             .as_ref()
-            .unwrap_or(return Err ("Не удалось получить доступ к книге Excel, хранящейся в поле структуры \"Report\"".to_string()))
+            .unwrap() //_or(return Err ("Не удалось получить доступ к книге Excel, хранящейся в поле структуры \"Report\"".to_string()))
             .get_worksheet("Result");
 
         if wrapped_sheet.is_none() {
@@ -181,23 +181,57 @@ impl<'a> Report<'a> {
                 .ok();
         };
 
-        let mut sh = wrapped_sheet.unwrap_or(
-            return Err("Не удалось создать лист для отчетной формы внутри книги Excel".to_string()),
-        );
+        let mut sh = wrapped_sheet.unwrap(); //_or(
+                                             //     return Err("Не удалось создать лист для отчетной формы внутри книги Excel".to_owned()),
+                                             // );
 
-        self.part_main.vector.iter().fold(0_u16, |first_col, item| {
+        // ниже итерация через "for" т.к. обработка ошибок со знаком "?" отклоняет калькулирующие замыкания итератеров такие как "fold"
+        let mut column = 0_u16;
+
+        for item in self.part_main.vector.iter() {
+            match item.moving {
+                Moving::Delete => continue,
+                Moving::AnotherVector => continue,
+                _ => (),
+            }
+
             if let Source::InTableHeader(name) = item.source {
-                Self::write_header(act, name, &mut sh, self.empty_row, first_col);
+                Self::write_header(act, name, &mut sh, self.empty_row, column)?;
             }
 
             if let Source::Calculate(name) = item.source {
-                Self::write_calculated(act, name, &mut sh, self.empty_row, first_col);
+                Self::write_calculated(act, name, &mut sh, self.empty_row, column)?;
             }
-            first_col + item.expected_columns
-        });
+            column += item.expected_columns;
+        }
+
+        for item in act.data_of_totals.iter() {
+            let initial_column = self
+                .part_base
+                .as_ref()
+                .unwrap() //unwrap не требует обработки: нет идей как это обрабатывать
+                .get_column(Moving::No, Source::AtBasePrices(&item.name));
+
+            let prev_col = self.part_main.total_col;
+
+            println!("{}", item.name);
+            if initial_column.is_some() {
+                let col = initial_column.unwrap() + prev_col;
+                Self::write_totals(item, &mut sh, self.empty_row, col);
+            }
+        }
 
         Ok(())
     }
+    fn write_totals(
+        totalsrow: &TotalsRow,
+        sh: &mut Worksheet,
+        row: u32,
+        col: u16,
+    ) -> Result<(), String> {
+        write_number(sh, row, col, totalsrow.base_price[0].unwrap_or(0.), None)
+    }
+
     fn other_print_parts(
         sample: &'a Act,
         part_1: &[OutputData<'a>],
@@ -287,7 +321,11 @@ impl<'a> Report<'a> {
         row: u32,
         col: u16,
     ) -> Result<(), String> {
-        let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
+        let index = act
+            .names_of_header
+            .iter()
+            .position(|desired_data| desired_data.name == name)
+            .unwrap(); //.unwrap_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
         let datavariant = &act.data_of_header[index];
 
         if let Some(DataVariant::String(text)) = datavariant {
@@ -309,8 +347,8 @@ impl<'a> Report<'a> {
     ) -> Result<(), String> {
         match name {
             "Глава" => loop {
-                let index_1 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава").unwrap_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
-                let index_2 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава наименование").unwrap_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
+                let index_1 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава").unwrap();//_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
+                let index_2 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава наименование").unwrap();//_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
                 let datavariant_1 = &act.data_of_header[index_1];
                 let datavariant_2 = &act.data_of_header[index_2];
 
@@ -329,7 +367,7 @@ impl<'a> Report<'a> {
                 break;
             },
             "По смете в ц.2000г." | "Выполнение работ в ц.2000г." => {
-                let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
+                let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap();//_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
                 let datavariant = &act.data_of_header[index];
 
                 if let Some(DataVariant::String(text)) = datavariant {
@@ -366,12 +404,13 @@ fn write_string(
     text: &str,
     format: Option<&Format>,
 ) -> Result<(), String> {
-    sheet.write_string(row, col, text, format).unwrap_or(
-        return Err(format!(
-            "Ошибка записи` строкового значения: \"{}\" в книге Excel",
-            text
-        )),
-    );
+    sheet.write_string(row, col, text, format).unwrap();
+    // _or(
+    //     return Err(format!(
+    //         "Ошибка записи` строкового значения: \"{}\" в книге Excel",
+    //         text
+    //     )),
+    // );
     Ok(())
 }
 
@@ -382,12 +421,13 @@ fn write_number(
     number: f64,
     format: Option<&Format>,
 ) -> Result<(), String> {
-    sheet.write_number(row, col, number, format).unwrap_or(
-        return Err(format!(
-            "Ошибка записи` числового значения: \"{}\" в книге Excel",
-            number
-        )),
-    );
+    sheet.write_number(row, col, number, format).unwrap();
+    // _or(
+    //     return Err(format!(
+    //         "Ошибка записи` числового значения: \"{}\" в книге Excel",
+    //         number
+    //     )),
+    // );
     Ok(())
 }
 fn write_formula(
@@ -397,11 +437,12 @@ fn write_formula(
     formula: &str,
     format: Option<&Format>,
 ) -> Result<(), String> {
-    sheet.write_formula(row, col, formula, format).unwrap_or(
-        return Err(format!(
-            "Ошибка записи` формулы: \"{}\" в книге Excel",
-            formula
-        )),
-    );
+    sheet.write_formula(row, col, formula, format).unwrap();
+    // _or(
+    //     return Err(format!(
+    //         "Ошибка записи` формулы: \"{}\" в книге Excel",
+    //         formula
+    //     )),
+    // );
     Ok(())
 }
