@@ -25,7 +25,7 @@ fn main() {
     let vector_of_acts: Vec<Act> = vec![act.clone(), act.clone(), act.clone()];
 
     let wb = Workbook::new("Test.xlsx");
-    let mut report = Report::set_sample(wb, &vector_of_acts[0]).unwrap();
+    let mut report = Report::new(wb);
     report.write(&vector_of_acts[0]);
     let wb_2 = report.stop_writing();
     let _ = wb_2.unwrap().close();

@@ -11,7 +11,7 @@ pub struct OutputData<'a> {
 #[derive(Debug, Clone, PartialEq)]
 
 pub enum Moving {
-    NO,
+    No,
     AnotherVector,
     Move,
     Delete,
@@ -33,10 +33,10 @@ pub struct PrintPart<'a> {
 }
 
 impl<'a> PrintPart<'a> {
-    pub fn new(vector: Vec<OutputData>) -> PrintPart {
+    pub fn new(vector: Vec<OutputData>) -> Option<PrintPart> {
         let total_col = Self::count_col(&vector);
 
-        PrintPart { vector, total_col }
+        Some(PrintPart { vector, total_col })
     }
     pub fn get_number_of_columns(&self) -> u16 {
         self.total_col
@@ -50,7 +50,7 @@ impl<'a> PrintPart<'a> {
                     return Some(counter);
                 }
                 OutputData {
-                    moving: Moving::NO, ..
+                    moving: Moving::No, ..
                 } => {
                     counter += outputdata.expected_columns;
                 }
@@ -70,7 +70,7 @@ impl<'a> PrintPart<'a> {
         vector
             .iter()
             .fold(0, |acc, outputdata| match outputdata.moving {
-                Moving::NO => acc + outputdata.expected_columns,
+                Moving::No => acc + outputdata.expected_columns,
                 Moving::Move => acc + outputdata.expected_columns,
                 _ => acc,
             })
@@ -80,7 +80,7 @@ impl<'a> PrintPart<'a> {
 fn PrintPart_test() {
     #[rustfmt::skip]
         let vec_to_test = vec![
-            OutputData{rename: None,                           moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Объект")},
+            OutputData{rename: None,                           moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Объект")},
             OutputData{rename: None,                           moving: Moving::Move, expected_columns: 2, source: Source::AtCurrPrices("Эксплуатация машин")},
             OutputData{rename: None,                           moving: Moving::Move, expected_columns: 3, source: Source::AtBasePrices("Эксплуатация машин")},
             OutputData{rename: Some("РЕНЕЙМ................"), moving: Moving::AnotherVector, expected_columns: 4, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
@@ -98,17 +98,16 @@ fn PrintPart_test() {
         )
     );
 }
-
 pub struct Report<'a> {
     pub book: Option<xlsxwriter::Workbook>,
-    pub part_1_just: PrintPart<'a>,
-    pub part_2_base: PrintPart<'a>,
-    pub part_3_curr: PrintPart<'a>,
+    pub part_main: PrintPart<'a>,
+    pub part_base: Option<PrintPart<'a>>,
+    pub part_curr: Option<PrintPart<'a>>,
     pub empty_row: u32,
 }
 
 impl<'a> Report<'a> {
-    pub fn set_sample(wb: xlsxwriter::Workbook, sample: &'a Act) -> Result<Report, &'static str> {
+    pub fn new(wb: xlsxwriter::Workbook) -> Report<'a> {
         // Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
         // но если какой-то акт имеет 16, 18, 0 или, скажем, 40 строк в итогах, то нужна какая-то логика, чтобы соотнести эти 40 строк одного акта
         // с 17 строками других актов. Нужно решение, как не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
@@ -118,24 +117,24 @@ impl<'a> Report<'a> {
 
         #[rustfmt::skip]
         let vec_1 = vec![
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Исполнитель")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::Calculate("Глава")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Объект")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Договор №")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Договор дата")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Исполнитель")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Глава")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Объект")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Договор №")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Договор дата")},
             OutputData{rename: None,                                            moving: Moving::Move,   expected_columns: 1, source: Source::AtBasePrices("Стоимость материальных ресурсов (всего)")},
             OutputData{rename: Some("Восстание машин"),                         moving: Moving::AnotherVector, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Смета №")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Смета наименование")},
-            OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::NO, expected_columns: 1, source: Source::Calculate("По смете в ц.2000г.")},
-            OutputData{rename: Some("Выполнение работ в ц.2000г., руб."),   moving: Moving::NO, expected_columns: 1, source: Source::Calculate("Выполнение работ в ц.2000г.")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Акт №")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Акт дата")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Отчетный период начало")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Отчетный период окончание")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
-            OutputData{rename: None,                                        moving: Moving::NO, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Смета №")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Смета наименование")},
+            OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::No, expected_columns: 1, source: Source::Calculate("По смете в ц.2000г.")},
+            OutputData{rename: Some("Выполнение работ в ц.2000г., руб."),   moving: Moving::No, expected_columns: 1, source: Source::Calculate("Выполнение работ в ц.2000г.")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Акт №")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Акт дата")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период начало")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период окончание")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
             OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::AnotherVector, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%")},
             OutputData{rename: Some("УДАЛИТЬ..............."),                  moving: Moving::Delete, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1")},
         ];
@@ -146,21 +145,58 @@ impl<'a> Report<'a> {
         // Другими словами, структура нашего отчета воспроизведет в столбцах порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
         // В итогах присутсвует два вида данных: базовые и текущие цены, таким образом получается отчет будет написан из 3 частей.
 
-        let (vec_2, vec_3) = Self::other_parts(sample, &vec_1);
+        let part_main = PrintPart::new(vec_1).unwrap();
 
-        let part_1_just = PrintPart::new(vec_1);
-        let part_2_base = PrintPart::new(vec_2);
-        let part_3_curr = PrintPart::new(vec_3);
-
-        Ok(Report {
+        Report {
             book: Some(wb),
-            part_1_just,
-            part_2_base,
-            part_3_curr,
+            part_main,
+            part_base: None,
+            part_curr: None,
             empty_row: 0,
-        })
+        }
     }
-    fn other_parts(
+
+    pub fn write(&mut self, act: &'a Act) -> Result<(), String> {
+        if self.part_base.is_none() && self.part_curr.is_none() {
+            let (vec_base, vec_curr) = Self::other_print_parts(act, &self.part_main.vector);
+            let part_base = PrintPart::new(vec_base);
+            let part_curr = PrintPart::new(vec_curr);
+
+            self.part_base = part_base;
+            self.part_curr = part_curr;
+        }
+
+        let mut wrapped_sheet = self
+            .book
+            .as_ref()
+            .unwrap_or(return Err ("Не удалось получить доступ к книге Excel, хранящейся в поле структуры \"Report\"".to_string()))
+            .get_worksheet("Result");
+
+        if let None = wrapped_sheet {
+            wrapped_sheet = self
+                .book
+                .as_mut()
+                .unwrap() //unwrap не требует обработки: обработка в переменной "wrapped_sheet"
+                .add_worksheet(Some("Result"))
+                .ok();
+        };
+
+        let mut sh = wrapped_sheet.unwrap_or(return Err("Не удалось создать лист для отчетной формы внутри книги Excel".to_string()));
+
+        self.part_main.vector.iter().fold(0_u16, |first_col, item| {
+            if let Source::InTableHeader(name) = item.source {
+                Self::write_header(act, name, &mut sh, self.empty_row, first_col);
+            }
+
+            if let Source::Calculate(name) = item.source {
+                Self::write_calculated(act, name, &mut sh, self.empty_row, first_col);
+            }
+            first_col + item.expected_columns
+        });
+
+        Ok(())
+    }
+    fn other_print_parts(
         sample: &'a Act,
         part_1: &[OutputData<'a>],
     ) -> (Vec<OutputData<'a>>, Vec<OutputData<'a>>) {
@@ -205,7 +241,7 @@ impl<'a> Report<'a> {
 
                 let outputdata = OutputData {
                     rename: new_name,
-                    moving: Moving::NO,
+                    moving: Moving::No,
                     expected_columns: columns_min,
                     source: src,
                 };
@@ -239,33 +275,11 @@ impl<'a> Report<'a> {
         );
         (part_2_base, part_3_curr)
     }
-    pub fn write(&mut self, act: &Act) {
-        let mut sh = self
-            .book
-            .as_mut()
-            .unwrap()
-            .add_worksheet(Some("Result"))
-            .unwrap();
-
-        self.part_1_just
-            .vector
-            .iter()
-            .fold(0_u16, |first_col, item| {
-                if let Source::InTableHeader(name) = item.source {
-                    Self::write_header(act, name, &mut sh, self.empty_row, first_col)
-                }
-
-                if let Source::Calculate(name) = item.source {
-                    Self::write_calculated(act, name, &mut sh, self.empty_row, first_col)
-                }
-                first_col + item.expected_columns
-            });
-    }
 
     // fn write_totals(part: &mut PrintPart<'a>, source: Source<'a>, expected_columns: u16) {}
 
-    fn write_header(act: &Act, name: &str, sh: &mut Worksheet, row: u32, col: u16) {
-        let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap_or_else(|| panic!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name));
+    fn write_header(act: &Act, name: &str, sh: &mut Worksheet, row: u32, col: u16) -> Result<(), String> {
+        let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
         let datavariant = &act.data_of_header[index];
 
         if let Some(DataVariant::String(insert)) = datavariant {
@@ -275,13 +289,15 @@ impl<'a> Report<'a> {
         if let Some(DataVariant::Float(x)) = datavariant {
             sh.write_number(row, col, *x, None).unwrap()
         }
+
+        Ok(())
     }
 
-    fn write_calculated(act: &Act, name: &str, sh: &mut Worksheet, row: u32, col: u16) {
+    fn write_calculated(act: &Act, name: &str, sh: &mut Worksheet, row: u32, col: u16) -> Result<(), String> {
         match name {
             "Глава" => loop {
-                let index_1 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава").unwrap_or_else(|| panic!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава\" обязательно должна быть в DESIRED_DATA_ARRAY"));
-                let index_2 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава наименование").unwrap_or_else(|| panic!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY"));
+                let index_1 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава").unwrap_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава\" обязательно должна быть в DESIRED_DATA_ARRAY".to_string()));
+                let index_2 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава наименование").unwrap_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY".to_string()));
                 let datavariant_1 = &act.data_of_header[index_1];
                 let datavariant_2 = &act.data_of_header[index_2];
 
@@ -300,7 +316,7 @@ impl<'a> Report<'a> {
                 break;
             },
             "По смете в ц.2000г." | "Выполнение работ в ц.2000г." => {
-                let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap_or_else(|| panic!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name));
+                let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
                 let datavariant = &act.data_of_header[index];
 
                 if let Some(DataVariant::String(text)) = datavariant {
@@ -319,8 +335,10 @@ impl<'a> Report<'a> {
                     sh.write_formula(row, col, &formula, None).unwrap();
                 };
             }
-            _ => unreachable!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: невозможная попытка записать \"{}\" на лист Excel", name),
+            _ => return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: невозможная попытка записать \"{}\" на лист Excel", name)),
         }
+
+        Ok(())
     }
 
     pub fn stop_writing(&mut self) -> Option<Workbook> {
