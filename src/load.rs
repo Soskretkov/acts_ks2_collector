@@ -174,10 +174,51 @@ impl<'a> Report<'a> {
             .filter(|outputdata| matches!(outputdata.source, Source::AtCurrPrices(_)))
             .collect::<Vec<_>>();
 
+        let get_outputdata = |exclude: &[&OutputData<'a>],
+                              price: &[Option<f64>],
+                              src: Source<'a>|
+         -> Option<OutputData<'a>> {
+            let (it_another_vector, not_listed, new_name) = exclude.iter().fold(
+                (false, true, None),
+                |(mut it_another_vector, mut not_listed, mut new_name), item| {
+                    match item {
+                        OutputData {
+                            rename: set_name,
+                            moving: Moving::AnotherVector,
+                            source,
+                            ..
+                        } if *source == src => {
+                            it_another_vector = true;
+                            not_listed = false;
+                            new_name = *set_name;
+                        }
+                        OutputData { source, .. } if *source == src => not_listed = false,
+                        _ => (),
+                    }
+
+                    (it_another_vector, not_listed, new_name)
+                },
+            );
+
+            if it_another_vector || not_listed {
+                let columns_min = price.iter().map(Option::is_some).count() as u16;
+
+                let outputdata = OutputData {
+                    rename: new_name,
+                    moving: Moving::NO,
+                    expected_columns: columns_min,
+                    source: src,
+                };
+
+                return Some(outputdata);
+            }
+            None
+        };
+
         let (part_2_base, part_3_curr) = sample.data_of_totals.iter().fold(
             (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
             |mut acc, smpl_totalsrow| {
-                if let Some(x) = Self::get_outputdata(
+                if let Some(x) = get_outputdata(
                     &exclude_from_base,
                     &smpl_totalsrow.base_price,
                     Source::AtBasePrices(&smpl_totalsrow.name),
@@ -185,7 +226,7 @@ impl<'a> Report<'a> {
                     acc.0.push(x)
                 };
 
-                if let Some(y) = Self::get_outputdata(
+                if let Some(y) = get_outputdata(
                     &exclude_from_curr,
                     &smpl_totalsrow.current_price,
                     Source::AtCurrPrices(&smpl_totalsrow.name),
@@ -197,47 +238,6 @@ impl<'a> Report<'a> {
             },
         );
         (part_2_base, part_3_curr)
-    }
-    fn get_outputdata(
-        exclude: &[&OutputData<'a>],
-        price: &[Option<f64>],
-        src: Source<'a>,
-    ) -> Option<OutputData<'a>> {
-        let (it_another_vector, not_listed, new_name) = exclude.iter().fold(
-            (false, true, None),
-            |(mut it_another_vector, mut not_listed, mut new_name), item| {
-                match item {
-                    OutputData {
-                        rename: set_name,
-                        moving: Moving::AnotherVector,
-                        source,
-                        ..
-                    } if *source == src => {
-                        it_another_vector = true;
-                        not_listed = false;
-                        new_name = *set_name;
-                    }
-                    OutputData { source, .. } if *source == src => not_listed = false,
-                    _ => (),
-                }
-
-                (it_another_vector, not_listed, new_name)
-            },
-        );
-
-        if it_another_vector || not_listed {
-            let columns_min = price.iter().map(Option::is_some).count() as u16;
-
-            let outputdata = OutputData {
-                rename: new_name,
-                moving: Moving::NO,
-                expected_columns: columns_min,
-                source: src,
-            };
-
-            return Some(outputdata);
-        }
-        None
     }
     pub fn write(&mut self, act: &Act) {
         let mut sh = self
@@ -260,10 +260,9 @@ impl<'a> Report<'a> {
                 }
                 first_col + item.expected_columns
             });
-
-        // for row in act.data_of_totals.iter() {}
     }
-    fn write_totals(part: &mut PrintPart<'a>, source: Source<'a>, expected_columns: u16) {}
+
+    // fn write_totals(part: &mut PrintPart<'a>, source: Source<'a>, expected_columns: u16) {}
 
     fn write_header(act: &Act, name: &str, sh: &mut Worksheet, row: u32, col: u16) {
         let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap_or_else(|| panic!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name));
