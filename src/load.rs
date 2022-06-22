@@ -1,5 +1,5 @@
 use crate::transform::{Act, DataVariant};
-use xlsxwriter::{Workbook, Worksheet};
+use xlsxwriter::{Format, Workbook, Worksheet};
 
 #[derive(Debug, Clone)]
 pub struct OutputData<'a> {
@@ -145,7 +145,7 @@ impl<'a> Report<'a> {
         // Другими словами, структура нашего отчета воспроизведет в столбцах порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
         // В итогах присутсвует два вида данных: базовые и текущие цены, таким образом получается отчет будет написан из 3 частей.
 
-        let part_main = PrintPart::new(vec_1).unwrap();
+        let part_main = PrintPart::new(vec_1).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
 
         Report {
             book: Some(wb),
@@ -172,7 +172,7 @@ impl<'a> Report<'a> {
             .unwrap_or(return Err ("Не удалось получить доступ к книге Excel, хранящейся в поле структуры \"Report\"".to_string()))
             .get_worksheet("Result");
 
-        if let None = wrapped_sheet {
+        if wrapped_sheet.is_none() {
             wrapped_sheet = self
                 .book
                 .as_mut()
@@ -181,7 +181,9 @@ impl<'a> Report<'a> {
                 .ok();
         };
 
-        let mut sh = wrapped_sheet.unwrap_or(return Err("Не удалось создать лист для отчетной формы внутри книги Excel".to_string()));
+        let mut sh = wrapped_sheet.unwrap_or(
+            return Err("Не удалось создать лист для отчетной формы внутри книги Excel".to_string()),
+        );
 
         self.part_main.vector.iter().fold(0_u16, |first_col, item| {
             if let Source::InTableHeader(name) = item.source {
@@ -278,26 +280,37 @@ impl<'a> Report<'a> {
 
     // fn write_totals(part: &mut PrintPart<'a>, source: Source<'a>, expected_columns: u16) {}
 
-    fn write_header(act: &Act, name: &str, sh: &mut Worksheet, row: u32, col: u16) -> Result<(), String> {
+    fn write_header(
+        act: &Act,
+        name: &str,
+        sh: &mut Worksheet,
+        row: u32,
+        col: u16,
+    ) -> Result<(), String> {
         let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
         let datavariant = &act.data_of_header[index];
 
-        if let Some(DataVariant::String(insert)) = datavariant {
-            sh.write_string(row, col, insert, None).unwrap()
+        if let Some(DataVariant::String(text)) = datavariant {
+            write_string(sh, row, col, text, None)?
         }
-
-        if let Some(DataVariant::Float(x)) = datavariant {
-            sh.write_number(row, col, *x, None).unwrap()
+        if let Some(DataVariant::Float(number)) = datavariant {
+            write_number(sh, row, col, *number, None)?
         }
 
         Ok(())
     }
 
-    fn write_calculated(act: &Act, name: &str, sh: &mut Worksheet, row: u32, col: u16) -> Result<(), String> {
+    fn write_calculated(
+        act: &Act,
+        name: &str,
+        sh: &mut Worksheet,
+        row: u32,
+        col: u16,
+    ) -> Result<(), String> {
         match name {
             "Глава" => loop {
-                let index_1 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава").unwrap_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава\" обязательно должна быть в DESIRED_DATA_ARRAY".to_string()));
-                let index_2 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава наименование").unwrap_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY".to_string()));
+                let index_1 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава").unwrap_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
+                let index_2 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава наименование").unwrap_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
                 let datavariant_1 = &act.data_of_header[index_1];
                 let datavariant_2 = &act.data_of_header[index_2];
 
@@ -311,8 +324,8 @@ impl<'a> Report<'a> {
                     _ => break,
                 };
 
-                let temp_res_3 = format!("{} «{}»", temp_res_1, temp_res_2);
-                sh.write_string(row, col, &temp_res_3, None).unwrap();
+                let text = format!("{} «{}»", temp_res_1, temp_res_2);
+                write_string(sh, row, col, &text, None)?;
                 break;
             },
             "По смете в ц.2000г." | "Выполнение работ в ц.2000г." => {
@@ -325,14 +338,14 @@ impl<'a> Report<'a> {
                         .replace(',', ".")
                         .replace(' ', "")
                         .parse::<f64>()
-                        .map(|insert| sh.write_number(row, col, insert * 1000., None).unwrap());
+                        .map(|number| write_number(sh, row, col, number * 1000., None)).unwrap();
                 }
             }
             "Ссылка на папку" => {},
             "Ссылка на файл" => {
                 if let Some(file_name) = act.path.split('\\').last() {
                     let formula = format!("=HYPERLINK(\"{}\", \"{}\")", act.path, file_name);
-                    sh.write_formula(row, col, &formula, None).unwrap();
+                    write_formula(sh, row, col, &formula, None)?;
                 };
             }
             _ => return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: невозможная попытка записать \"{}\" на лист Excel", name)),
@@ -344,4 +357,51 @@ impl<'a> Report<'a> {
     pub fn stop_writing(&mut self) -> Option<Workbook> {
         self.book.take()
     }
+}
+
+fn write_string(
+    sheet: &mut Worksheet,
+    row: u32,
+    col: u16,
+    text: &str,
+    format: Option<&Format>,
+) -> Result<(), String> {
+    sheet.write_string(row, col, text, format).unwrap_or(
+        return Err(format!(
+            "Ошибка записи` строкового значения: \"{}\" в книге Excel",
+            text
+        )),
+    );
+    Ok(())
+}
+
+fn write_number(
+    sheet: &mut Worksheet,
+    row: u32,
+    col: u16,
+    number: f64,
+    format: Option<&Format>,
+) -> Result<(), String> {
+    sheet.write_number(row, col, number, format).unwrap_or(
+        return Err(format!(
+            "Ошибка записи` числового значения: \"{}\" в книге Excel",
+            number
+        )),
+    );
+    Ok(())
+}
+fn write_formula(
+    sheet: &mut Worksheet,
+    row: u32,
+    col: u16,
+    formula: &str,
+    format: Option<&Format>,
+) -> Result<(), String> {
+    sheet.write_formula(row, col, formula, format).unwrap_or(
+        return Err(format!(
+            "Ошибка записи` формулы: \"{}\" в книге Excel",
+            formula
+        )),
+    );
+    Ok(())
 }
