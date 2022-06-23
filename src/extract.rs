@@ -1,3 +1,4 @@
+use acts_ks2_etl::{ErrDescription, ErrName};
 use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
 use std::collections::HashMap;
 use std::fs::File;
@@ -73,11 +74,20 @@ impl Sheet {
         sheetname: &'static str,
         search_reference_points: &[(usize, Required, &'static str)],
         expected_sum_of_requir_col: usize,
-    ) -> Result<Sheet, &'static str> {
-        let data = match workbook.data.worksheet_range(sheetname) {
-            Some(x) => x.unwrap(),
-            None => return Err("Отсуствует запрошенный лист"),
-        };
+    ) -> Result<Sheet, ErrDescription> {
+        let data = workbook
+            .data
+            .worksheet_range(sheetname)
+            .ok_or(ErrDescription {
+                name: ErrName::calamine_sheet_of_the_book_is_undetectable,
+                description: None,
+            })?
+            .or_else(|error| {
+                Err(ErrDescription {
+                    name: ErrName::calamine_sheet_of_the_book_is_unreadable(error),
+                    description: None,
+                })
+            })?;
 
         let mut search_points = HashMap::new();
 
@@ -110,32 +120,50 @@ impl Sheet {
             .iter()
             .filter(|x| x.1 == Required::Y)
             .last()
-            .unwrap() //unwrap не требует обработки: SEARCH_REFERENCE_POINTS всегда имеет значения
+            .unwrap_or_else(|| panic!("ложь: \"DESIRED_DATA_ARRAY всегда имеет значения\""))
             .2;
-        if search_points.get(test).is_none() {
-            return Err("Лист не содержит всех необходимых данных");
-        }
+
+        search_points.get(test).ok_or(ErrDescription {
+            name: ErrName::sheet_not_contain_all_necessary_data,
+            description: None,
+        });
 
         // Проверка значений на удаленность столбцов, чтобы гарантировать что найден нужный лист.
-        let first_col = search_points.get("стройка").unwrap().1;
+        let first_col = search_points
+            .get("стройка")
+            .unwrap_or_else(|| panic!("ложь: всегда дейсвительные имена для HashMap"));
 
         let (just_a_amount_requir_col, just_a_sum_requir_col) = search_reference_points
             .iter()
             .fold((0_usize, 0), |acc, item| match item.1 {
-                Required::Y => (acc.0 + 1, acc.1 + search_points.get(item.2).unwrap().1),
+                Required::Y => (
+                    acc.0 + 1,
+                    acc.1
+                        + search_points
+                            .get(item.2)
+                            .unwrap_or_else(|| {
+                                panic!("ложь: всегда дейсвительные имена для HashMap")
+                            })
+                            .1,
+                ),
                 _ => acc,
             });
 
-        if let false = just_a_sum_requir_col - first_col * just_a_amount_requir_col
+        if let false = just_a_sum_requir_col - first_col.1 * just_a_amount_requir_col
             == expected_sum_of_requir_col
         {
-            return Err("Нетипичное заглавие (шапка) КС-2");
+            return Err(ErrDescription {
+                name: ErrName::shifted_columns_in_header,
+                description: None,
+            });
         }
 
-        let range_start = match data.start() {
-            Some(x) => (x.0 as usize, x.1 as usize),
-            None => return Err("Не удалось получить начало диапазона листа"),
-        };
+        let range_start_u32 = data.start().ok_or(ErrDescription {
+            name: ErrName::calamine_sheet_of_the_book_is_undetectable,
+            description: None,
+        })?;
+
+        let range_start = (range_start_u32.0 as usize, range_start_u32.1 as usize);
 
         Ok(Sheet {
             path: workbook.path.clone(),

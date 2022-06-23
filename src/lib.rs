@@ -1,22 +1,22 @@
 
 use std::error::Error;
-pub enum ErrKind {
-    Handled,
-    Fatal,
-}
+#[derive(Debug)]
+// pub enum ErrKind {
+//     Handled,
+//     Fatal,
+// }
 
 pub enum ErrName {
     shifted_columns_in_header,
     sheet_not_contain_all_necessary_data,
-    book_not_contain_requested_sheet,
+    calamine_sheet_of_the_book_is_undetectable,
+    calamine_sheet_of_the_book_is_unreadable(calamine::XlsxError),
     calamine,
-
 
 }
 
+#[derive(Debug)]
 pub struct ErrDescription {
-    name: ErrName,
-    kind: ErrKind,
-    description: Option<String>,
-    err: Option<Box<dyn Error>>,
+    pub name: ErrName,
+    pub description: Option<String>,
 }
