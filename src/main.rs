@@ -30,7 +30,7 @@ fn main() {
     if let Err(x) = report.write(&vector_of_acts[0]) {
         println!("{x}");
     };
-    let wb_2 = report.stop_writing();
+    let wb_2 = report.finish_writing();
     let _ = wb_2.unwrap().close();
 
     // println!("{:#?}", report.part_1_just);

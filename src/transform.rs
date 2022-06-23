@@ -71,7 +71,7 @@ impl<'a> Act {
                         "Глава наименование" => match stroika_adr.0 + 2 == object_adr.0 {
                             true => Some((stroika_adr.0 + 1, stroika_adr.1 + 3)),
                             false => None,
-                        }//Адрес возвращается только если между "Стройкой" и "Объектом" одна строка
+                        }
                         _ => None,
                     },
                 };

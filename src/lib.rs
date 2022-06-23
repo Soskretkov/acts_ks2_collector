@@ -1,4 +1,3 @@
-
 use std::error::Error;
 #[derive(Debug)]
 // pub enum ErrKind {
@@ -12,7 +11,6 @@ pub enum ErrName {
     calamine_sheet_of_the_book_is_undetectable,
     calamine_sheet_of_the_book_is_unreadable(calamine::XlsxError),
     calamine,
-
 }
 
 #[derive(Debug)]

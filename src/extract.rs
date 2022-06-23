@@ -131,7 +131,7 @@ impl Sheet {
         // Проверка значений на удаленность столбцов, чтобы гарантировать что найден нужный лист.
         let first_col = search_points
             .get("стройка")
-            .unwrap_or_else(|| panic!("ложь: всегда дейсвительные имена для HashMap"));
+            .unwrap_or_else(|| panic!("ложь: \"Всегда действительные имена для HashMap\""));
 
         let (just_a_amount_requir_col, just_a_sum_requir_col) = search_reference_points
             .iter()
@@ -142,7 +142,7 @@ impl Sheet {
                         + search_points
                             .get(item.2)
                             .unwrap_or_else(|| {
-                                panic!("ложь: всегда дейсвительные имена для HashMap")
+                                panic!("ложь: \"Всегда действительные имена для HashMap\"")
                             })
                             .1,
                 ),

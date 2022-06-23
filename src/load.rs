@@ -124,11 +124,11 @@ impl<'a> Report<'a> {
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Договор дата")},
             OutputData{rename: None,                                            moving: Moving::Move,   expected_columns: 1, source: Source::AtBasePrices("Стоимость материальных ресурсов (всего)")},
             OutputData{rename: Some("Восстание машин"),                         moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Смета №")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Смета №")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Смета наименование")},
             OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::No, expected_columns: 1, source: Source::Calculate("По смете в ц.2000г.")},
             OutputData{rename: Some("Выполнение работ в ц.2000г., руб."),   moving: Moving::No, expected_columns: 1, source: Source::Calculate("Выполнение работ в ц.2000г.")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Акт №")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Акт №")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Акт дата")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период начало")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период окончание")},
@@ -145,7 +145,12 @@ impl<'a> Report<'a> {
         // Другими словами, структура нашего отчета воспроизведет в столбцах порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
         // В итогах присутсвует два вида данных: базовые и текущие цены, таким образом получается отчет будет написан из 3 частей.
 
-        let vec_1: Vec<OutputData> = list.into_iter().filter(|outputdata| outputdata.moving == Moving::No || outputdata.moving == Moving::Move).collect();
+        let vec_1: Vec<OutputData> = list
+            .into_iter()
+            .filter(|outputdata| {
+                outputdata.moving == Moving::No || outputdata.moving == Moving::Move
+            })
+            .collect();
         let part_main = PrintPart::new(vec_1).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
 
         Report {
@@ -187,7 +192,7 @@ impl<'a> Report<'a> {
                                              // );
 
         let mut column = 0_u16;
-        // ниже итерация через "for" т.к. обработка ошибок со знаком "?" отклоняет калькулирующие замыкания итератеров такие как "fold"
+        // ниже итерация через "for" т.к. обработка ошибок со знаком "?" отклоняет калькулирующие замыкания итератеров таких как "fold"
         for item in self.part_main.vector.iter() {
             match item.moving {
                 Moving::DeleteMatches => continue,
@@ -205,47 +210,152 @@ impl<'a> Report<'a> {
             column += item.expected_columns;
         }
 
-        for item in act.data_of_totals.iter() {
-            let get_column = |source: Source| {
-                let column_number_in_totals_vector = match source {
-                    Source::AtBasePrices(_) => self.part_base.as_ref().unwrap().get_column(&source),
-                    Source::AtCurrPrices(_) => {
-                        match self.part_curr.as_ref().unwrap().get_column(&source) {
-                            Some(x) => Some(x + self.part_base.as_ref().unwrap().total_col),
-                            None => None,
-                        }
-                    }
-                    _ => unreachable!(),
-                };
-
-                match column_number_in_totals_vector {
-                    Some(x) => Some(x + self.part_main.total_col),
-                    _ => match self.part_main.get_column(&source) {
-                        Some(x) => Some(x),
-                        _ => None,
-                    },
-                }
-            };
-
-            if let Some(col) = get_column(Source::AtBasePrices(&item.name)) {
-                write_number(&mut sh, self.empty_row, col, item.base_price[0].unwrap_or(0.), None);
-            }
-
-            if let Some(col) = get_column(Source::AtCurrPrices(&item.name)) {
-                write_number(&mut sh, self.empty_row, col, item.curr_price[0].unwrap_or(0.), None);
-            }
+        for totalsrow in act.data_of_totals.iter() {
+            Self::write_totals(
+                totalsrow,
+                &self.part_main,
+                self.part_base.as_mut().unwrap(),
+                self.part_curr.as_mut().unwrap(),
+                &mut sh,
+                self.empty_row,
+            );
         }
 
         Ok(())
     }
-    // fn write_totals(
-    // //     totalsrow: &TotalsRow,
-    // //     sh: &mut Worksheet,
-    // //     row: u32,
-    // //     col: u16,
-    // // ) -> Result<(), String> {
-    // //     write_number(sh, row, col, totalsrow.base_price[0].unwrap_or(0.), None)
-    // }
+    fn write_header(
+        act: &Act,
+        name: &str,
+        sh: &mut Worksheet,
+        row: u32,
+        col: u16,
+    ) -> Result<(), String> {
+        let index = act
+            .names_of_header
+            .iter()
+            .position(|desired_data| desired_data.name == name)
+            .unwrap(); //.unwrap_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
+        let datavariant = &act.data_of_header[index];
+
+        if let Some(DataVariant::String(text)) = datavariant {
+            write_string(sh, row, col, text, None)?
+        }
+        if let Some(DataVariant::Float(number)) = datavariant {
+            write_number(sh, row, col, *number, None)?
+        }
+
+        Ok(())
+    }
+
+    fn write_calculated(
+        act: &Act,
+        name: &str,
+        sh: &mut Worksheet,
+        row: u32,
+        col: u16,
+    ) -> Result<(), String> {
+        match name {
+            "Глава" => loop {
+                let index_1 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава").unwrap();//_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
+                let index_2 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава наименование").unwrap();//_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
+                let datavariant_1 = &act.data_of_header[index_1];
+                let datavariant_2 = &act.data_of_header[index_2];
+
+                let temp_res_1 = match datavariant_1 {
+                    Some(DataVariant::String(word)) if !word.is_empty() => word,
+                    _ => break,
+                };
+
+                let temp_res_2 = match datavariant_2 {
+                    Some(DataVariant::String(word)) if !word.is_empty() => word,
+                    _ => break,
+                };
+
+                let text = format!("{} «{}»", temp_res_1, temp_res_2);
+                write_string(sh, row, col, &text, None)?;
+                break;
+            },
+            "Смета №" => {
+                let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap();//_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
+                let datavariant = &act.data_of_header[index];
+
+                if let Some(DataVariant::String(text)) = datavariant {
+                    text.strip_prefix("Смета № ")
+                        .map(|text| write_string(sh, row, col, text, None));
+                }
+            }
+            "Акт №" => {
+                let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap();//_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
+                let datavariant = &act.data_of_header[index];
+
+                if let Some(DataVariant::String(text)) = datavariant {
+                    if text.matches(['/']).count() == 3 {
+                       let text = &text.chars().take_while(|ch| *ch != '/').collect::<String>();
+                       write_string(sh, row, col, text, None);
+                    }
+                }
+            }
+            "По смете в ц.2000г." | "Выполнение работ в ц.2000г." => {
+                let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap();//_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
+                let datavariant = &act.data_of_header[index];
+
+                if let Some(DataVariant::String(text)) = datavariant {
+                    let _ = text.replace("тыс.", "")
+                        .replace("руб.", "")
+                        .replace(',', ".")
+                        .replace(' ', "")
+                        .parse::<f64>()
+                        .map(|number| write_number(sh, row, col, number * 1000., None)).unwrap();
+                }
+            }
+            "Ссылка на папку" => {},
+            "Ссылка на файл" => {
+                if let Some(file_name) = act.path.split('\\').last() {
+                    let formula = format!("=HYPERLINK(\"{}\", \"{}\")", act.path, file_name);
+                    write_formula(sh, row, col, &formula, None)?;
+                };
+            }
+            _ => return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: невозможная попытка записать \"{}\" на лист Excel", name)),
+        }
+
+        Ok(())
+    }
+
+    fn write_totals(
+        totalsrow: &TotalsRow,
+        part_main: &PrintPart,
+        part_base: &mut PrintPart,
+        part_curr: &mut PrintPart,
+        sh: &mut Worksheet,
+        row: u32,
+    ) {
+        let get_column = |source: Source| {
+            let column_number_in_totals_vector = match source {
+                Source::AtBasePrices(_) => part_base.get_column(&source),
+                Source::AtCurrPrices(_) => match part_curr.get_column(&source) {
+                    Some(x) => Some(x + part_base.total_col),
+                    None => None,
+                },
+                _ => unreachable!(),
+            };
+
+            match column_number_in_totals_vector {
+                Some(x) => Some(x + part_main.total_col),
+                _ => match part_main.get_column(&source) {
+                    Some(x) => Some(x),
+                    _ => None,
+                },
+            }
+        };
+
+        if let Some(col) = get_column(Source::AtBasePrices(&totalsrow.name)) {
+            write_number(sh, row, col, totalsrow.base_price[0].unwrap_or(0.), None);
+        }
+
+        if let Some(col) = get_column(Source::AtCurrPrices(&totalsrow.name)) {
+            write_number(sh, row, col, totalsrow.curr_price[0].unwrap_or(0.), None);
+        }
+    }
 
     fn other_print_parts(
         sample: &'a Act,
@@ -326,88 +436,7 @@ impl<'a> Report<'a> {
         );
         (part_2_base, part_3_curr)
     }
-
-    // fn write_totals(part: &mut PrintPart<'a>, source: Source<'a>, expected_columns: u16) {}
-
-    fn write_header(
-        act: &Act,
-        name: &str,
-        sh: &mut Worksheet,
-        row: u32,
-        col: u16,
-    ) -> Result<(), String> {
-        let index = act
-            .names_of_header
-            .iter()
-            .position(|desired_data| desired_data.name == name)
-            .unwrap(); //.unwrap_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
-        let datavariant = &act.data_of_header[index];
-
-        if let Some(DataVariant::String(text)) = datavariant {
-            write_string(sh, row, col, text, None)?
-        }
-        if let Some(DataVariant::Float(number)) = datavariant {
-            write_number(sh, row, col, *number, None)?
-        }
-
-        Ok(())
-    }
-
-    fn write_calculated(
-        act: &Act,
-        name: &str,
-        sh: &mut Worksheet,
-        row: u32,
-        col: u16,
-    ) -> Result<(), String> {
-        match name {
-            "Глава" => loop {
-                let index_1 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава").unwrap();//_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
-                let index_2 = act.names_of_header.iter().position(|desired_data| desired_data.name == "Глава наименование").unwrap();//_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
-                let datavariant_1 = &act.data_of_header[index_1];
-                let datavariant_2 = &act.data_of_header[index_2];
-
-                let temp_res_1 = match datavariant_1 {
-                    Some(DataVariant::String(word)) if !word.is_empty() => word,
-                    _ => break,
-                };
-
-                let temp_res_2 = match datavariant_2 {
-                    Some(DataVariant::String(word)) if !word.is_empty() => word,
-                    _ => break,
-                };
-
-                let text = format!("{} «{}»", temp_res_1, temp_res_2);
-                write_string(sh, row, col, &text, None)?;
-                break;
-            },
-            "По смете в ц.2000г." | "Выполнение работ в ц.2000г." => {
-                let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap();//_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
-                let datavariant = &act.data_of_header[index];
-
-                if let Some(DataVariant::String(text)) = datavariant {
-                    let _ = text.replace("тыс.", "")
-                        .replace("руб.", "")
-                        .replace(',', ".")
-                        .replace(' ', "")
-                        .parse::<f64>()
-                        .map(|number| write_number(sh, row, col, number * 1000., None)).unwrap();
-                }
-            }
-            "Ссылка на папку" => {},
-            "Ссылка на файл" => {
-                if let Some(file_name) = act.path.split('\\').last() {
-                    let formula = format!("=HYPERLINK(\"{}\", \"{}\")", act.path, file_name);
-                    write_formula(sh, row, col, &formula, None)?;
-                };
-            }
-            _ => return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: невозможная попытка записать \"{}\" на лист Excel", name)),
-        }
-
-        Ok(())
-    }
-
-    pub fn stop_writing(&mut self) -> Option<Workbook> {
+    pub fn finish_writing(&mut self) -> Option<Workbook> {
         let mut sh = self
             .book
             .as_ref()
@@ -426,7 +455,7 @@ impl<'a> Report<'a> {
             let prefix = match outputdata.source {
                 Source::AtBasePrices(_) => Some("БЦ"),
                 Source::AtCurrPrices(_) => Some("TЦ"),
-                _ => None,                
+                _ => None,
             };
 
             let ending = match outputdata.rename {
