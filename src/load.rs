@@ -42,11 +42,11 @@ impl<'a> PrintPart<'a> {
         self.total_col
     }
 
-    pub fn get_column(&self, mvg: Moving, src: Source<'a>) -> Option<u16> {
+    pub fn get_column(&self, src: &Source<'a>) -> Option<u16> {
         let mut counter = 0;
         for outputdata in self.vector.iter() {
             match outputdata {
-                OutputData { moving, source, .. } if *moving == mvg && *source == src => {
+                OutputData { source, .. } if source == src => {
                     return Some(counter);
                 }
                 OutputData {
@@ -87,15 +87,14 @@ fn PrintPart_test() {
             OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::Delete, expected_columns: 5, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
             OutputData{rename: None,                           moving: Moving::Move,   expected_columns: 6, source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)")},
         ];
-    let printpart = PrintPart::new(vec_to_test);
+    let printpart = PrintPart::new(vec_to_test).unwrap();
 
     assert_eq!(&12, &printpart.get_number_of_columns());
     assert_eq!(
         Some(6),
-        printpart.get_column(
-            Moving::Move,
-            Source::AtCurrPrices("Стоимость материальных ресурсов (всего)")
-        )
+        printpart.get_column(&Source::AtCurrPrices(
+            "Стоимость материальных ресурсов (всего)"
+        ))
     );
 }
 pub struct Report<'a> {
@@ -116,14 +115,14 @@ impl<'a> Report<'a> {
         // Позиция в массиве будет соответсвовать столбцу выходной формы (это крайние левые столбцы шапки):
 
         #[rustfmt::skip]
-        let vec_1 = vec![
+        const LIST: [OutputData; 20] = [
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Исполнитель")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Глава")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Объект")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Договор №")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Договор дата")},
             OutputData{rename: None,                                            moving: Moving::Move,   expected_columns: 1, source: Source::AtBasePrices("Стоимость материальных ресурсов (всего)")},
-            OutputData{rename: Some("Восстание машин"),                         moving: Moving::AnotherVector, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин")},
+            OutputData{rename: Some("Восстание машин"),                         moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Смета №")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Смета наименование")},
             OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::No, expected_columns: 1, source: Source::Calculate("По смете в ц.2000г.")},
@@ -145,6 +144,7 @@ impl<'a> Report<'a> {
         // Другими словами, структура нашего отчета воспроизведет в столбцах порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
         // В итогах присутсвует два вида данных: базовые и текущие цены, таким образом получается отчет будет написан из 3 частей.
 
+        let vec_1: Vec<OutputData> = LIST.into_iter().filter(|outputdata| outputdata.moving == Moving::No || outputdata.moving == Moving::Move).collect();
         let part_main = PrintPart::new(vec_1).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
 
         Report {
@@ -152,7 +152,7 @@ impl<'a> Report<'a> {
             part_main,
             part_base: None,
             part_curr: None,
-            empty_row: 0,
+            empty_row: 1,
         }
     }
 
@@ -185,9 +185,8 @@ impl<'a> Report<'a> {
                                              //     return Err("Не удалось создать лист для отчетной формы внутри книги Excel".to_owned()),
                                              // );
 
-        // ниже итерация через "for" т.к. обработка ошибок со знаком "?" отклоняет калькулирующие замыкания итератеров такие как "fold"
         let mut column = 0_u16;
-
+        // ниже итерация через "for" т.к. обработка ошибок со знаком "?" отклоняет калькулирующие замыкания итератеров такие как "fold"
         for item in self.part_main.vector.iter() {
             match item.moving {
                 Moving::Delete => continue,
@@ -206,17 +205,32 @@ impl<'a> Report<'a> {
         }
 
         for item in act.data_of_totals.iter() {
-            let initial_column = self
-                .part_base
-                .as_ref()
-                .unwrap() //unwrap не требует обработки: нет идей как это обрабатывать
-                .get_column(Moving::No, Source::AtBasePrices(&item.name));
+            let get_column = |source: Source| {
+                let column_number_in_totals_vector = match source {
+                    Source::AtBasePrices(_) => self.part_base.as_ref().unwrap().get_column(&source),
+                    Source::AtCurrPrices(_) => {
+                        match self.part_curr.as_ref().unwrap().get_column(&source) {
+                            Some(x) => Some(x + self.part_base.as_ref().unwrap().total_col),
+                            None => None,
+                        }
+                    }
+                    _ => unreachable!(),
+                };
 
-            let prev_col = self.part_main.total_col;
+                match column_number_in_totals_vector {
+                    Some(x) => Some(x + self.part_main.total_col),
+                    _ => match self.part_main.get_column(&source) {
+                        Some(x) => Some(x),
+                        _ => None,
+                    },
+                }
+            };
 
-            println!("{}", item.name);
-            if initial_column.is_some() {
-                let col = initial_column.unwrap() + prev_col;
+            if let Some(col) = get_column(Source::AtBasePrices(&item.name)) {
+                Self::write_totals(item, &mut sh, self.empty_row, col);
+            }
+
+            if let Some(col) = get_column(Source::AtCurrPrices(&item.name)) {
                 Self::write_totals(item, &mut sh, self.empty_row, col);
             }
         }
@@ -393,6 +407,37 @@ impl<'a> Report<'a> {
     }
 
     pub fn stop_writing(&mut self) -> Option<Workbook> {
+        let mut sh = self
+            .book
+            .as_ref()
+            .unwrap() //_or(return Err ("Не удалось получить доступ к книге Excel, хранящейся в поле структуры \"Report\"".to_string()))
+            .get_worksheet("Result")
+            .unwrap();
+
+        let header = self
+            .part_main
+            .vector
+            .iter()
+            .chain(self.part_base.as_ref().unwrap().vector.iter())
+            .chain(self.part_curr.as_ref().unwrap().vector.iter());
+
+        header.fold(0, |mut acc, outputdata| {
+            let name = match outputdata.rename {
+                Some(x) => x,
+                _ => match outputdata.source {
+                    Source::InTableHeader(x) => x,
+                    Source::Calculate(x) => x,
+                    Source::AtBasePrices(x) => x,
+                    Source::AtCurrPrices(x) => x,
+                },
+            };
+            (0..outputdata.expected_columns).for_each(|exp_col| {
+                // println!("{}", acc);
+                write_string(&mut sh, 0, acc, name, None);
+            });
+            acc + outputdata.expected_columns
+        });
+
         self.book.take()
     }
 }
