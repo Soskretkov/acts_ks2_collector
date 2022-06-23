@@ -10,7 +10,8 @@ use crate::transform::Act;
 fn main() {
     // let (_path, _sh_name) = ui::session();
 
-    let path = r"C:\Users\User\rust\acts_ks2_etl\f.xlsm";
+    let path = "f.xlsm";
+    // let path = r"C:\Users\User\rust\acts_ks2_etl\f.xlsm";
     let mut wb = Book::new(path).expect(&("Не удалось считать файл".to_owned() + path));
 
     let sheet = Sheet::new(

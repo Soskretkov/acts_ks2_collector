@@ -191,9 +191,9 @@ impl<'a> Report<'a> {
 
         let vec_1: Vec<OutputData> = list
             .into_iter()
-            .filter(|outputdata| {
-                outputdata.moving == Moving::No || outputdata.moving == Moving::Move
-            })
+            // .filter(|outputdata| {
+            //     outputdata.moving == Moving::No || outputdata.moving == Moving::Move
+            // })
             .collect();
         let part_main = PrintPart::new(vec_1).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
 
@@ -380,7 +380,7 @@ impl<'a> Report<'a> {
                     Some(x) => Some(x + part_base.total_col),
                     None => None,
                 },
-                _ => unreachable!(),
+                _ => unreachable!("операция не над строками, которые встречаются в итогах акта"),
             };
 
             match column_number_in_totals_vector {
@@ -423,31 +423,82 @@ impl<'a> Report<'a> {
             .filter(|outputdata| matches!(outputdata.source, Source::AtCurrPrices(_, _)))
             .collect::<Vec<_>>();
 
+        println!("base {}", exclude_from_base.len());
+        println!("curr {}", exclude_from_curr.len());
         let get_outputdata = |exclude: &[&OutputData<'a>],
                               price: &[Option<f64>],
                               src: Source<'a>|
          -> Option<OutputData<'a>> {
-            let (it_another_vector, not_listed, new_name) = exclude.iter().fold(
-                (false, true, None),
-                |(mut it_another_vector, mut not_listed, mut new_name), item| {
+            let name = match src {
+                Source::AtBasePrices(words, _) => words,
+                Source::AtCurrPrices(words, _) => words,
+                _ => unreachable!("операция не над строками, которые встречаются в итогах акта"),
+            };
+            let mut it_another_vector = false;
+            let mut not_listed = false;
+            let mut new_name = None;
+
+            'outer: loop {
+                for item in exclude.iter() {
                     match item {
                         OutputData {
                             rename: set_name,
                             moving: Moving::AnotherVector,
-                            source,
+                            source:
+                                Source::AtBasePrices(text, Matches::Exact)
+                                | Source::AtCurrPrices(text, Matches::Exact),
                             ..
-                        } if *source == src => {
+                        } if *text == name => {
                             it_another_vector = true;
                             not_listed = false;
                             new_name = *set_name;
+                println!("{}", name);
+                            break 'outer;
                         }
-                        OutputData { source, .. } if *source == src => not_listed = false,
+                        _ => (),
+                    };
+                }
+                for item in exclude.iter() {
+                    match item {
+                        OutputData {
+                            rename: set_name,
+                            moving: Moving::AnotherVector,
+                            source:
+                                Source::AtBasePrices(text, Matches::Contains)
+                                | Source::AtCurrPrices(text, Matches::Contains),
+                            ..
+                        } if name.contains(*text) => {
+                            it_another_vector = true;
+                            not_listed = false;
+                            new_name = *set_name;
+                println!("{}", name);
+                            break 'outer;
+                        }
+                        _ => (),
+                    };
+                }
+                for item in exclude.iter() {
+                    match item {
+                        OutputData {
+                            source: Source::AtBasePrices(text, _),
+                            ..
+                        } if *text == name => {
+                            not_listed = false;
+                println!("{}", name);
+                            break 'outer;
+                        }
+                        OutputData {
+                            source: Source::AtCurrPrices(text, _),
+                            ..
+                        } if *text == name => {
+                            not_listed = false;
+                            break 'outer;
+                        }
                         _ => (),
                     }
-
-                    (it_another_vector, not_listed, new_name)
-                },
-            );
+                }
+                break;
+            }
 
             if it_another_vector || not_listed {
                 let columns_min = price.iter().map(Option::is_some).count() as u16;
