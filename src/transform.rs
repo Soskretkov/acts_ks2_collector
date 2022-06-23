@@ -113,14 +113,14 @@ impl<'a> Act {
                         match acc.iter_mut().find(|object| object.name == row_name) {
                             Some(x) => {
                                 x.base_price.push(base_price.get_float());
-                                x.current_price.push(current_price.get_float());
+                                x.curr_price.push(current_price.get_float());
                                 x.row_number.push(sheet.range_start.0 + row + 1);
                             }
                             None => {
                                 let temp_total_row = TotalsRow {
                                     name: row_name,
                                     base_price: vec![base_price.get_float()],
-                                    current_price: vec![current_price.get_float()],
+                                    curr_price: vec![current_price.get_float()],
                                     row_number: vec![sheet.range_start.0 + row + 1],
                                 };
                                 acc.push(temp_total_row);
@@ -142,7 +142,7 @@ impl<'a> Act {
 pub struct TotalsRow {
     pub name: String,
     pub base_price: Vec<Option<f64>>,
-    pub current_price: Vec<Option<f64>>,
+    pub curr_price: Vec<Option<f64>>,
     pub row_number: Vec<usize>,
 }
 

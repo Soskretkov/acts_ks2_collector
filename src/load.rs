@@ -14,7 +14,8 @@ pub enum Moving {
     No,
     AnotherVector,
     Move,
-    Delete,
+    DeleteMatches,
+    DeleteСontains,
 }
 
 // Четыре вида данных на выходе: в готовом виде в шапке, в готов виде в итогах акта (2 варанта), и нет готовых (нужно расчитать программой):
@@ -84,7 +85,7 @@ fn PrintPart_test() {
             OutputData{rename: None,                           moving: Moving::Move, expected_columns: 2, source: Source::AtCurrPrices("Эксплуатация машин")},
             OutputData{rename: None,                           moving: Moving::Move, expected_columns: 3, source: Source::AtBasePrices("Эксплуатация машин")},
             OutputData{rename: Some("РЕНЕЙМ................"), moving: Moving::AnotherVector, expected_columns: 4, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
-            OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::Delete, expected_columns: 5, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
+            OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::DeleteMatches, expected_columns: 5, source: Source::AtCurrPrices("Производство работ в зимнее время 4%")},
             OutputData{rename: None,                           moving: Moving::Move,   expected_columns: 6, source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)")},
         ];
     let printpart = PrintPart::new(vec_to_test).unwrap();
@@ -115,7 +116,7 @@ impl<'a> Report<'a> {
         // Позиция в массиве будет соответсвовать столбцу выходной формы (это крайние левые столбцы шапки):
 
         #[rustfmt::skip]
-        const LIST: [OutputData; 20] = [
+        let list: [OutputData; 20] = [
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Исполнитель")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Глава")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Объект")},
@@ -132,10 +133,10 @@ impl<'a> Report<'a> {
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период начало")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период окончание")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
-            OutputData{rename: None,                                        moving: Moving::Delete, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
+            OutputData{rename: None,                                        moving: Moving::DeleteMatches, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
             OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::AnotherVector, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%")},
-            OutputData{rename: Some("УДАЛИТЬ..............."),                  moving: Moving::Delete, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1")},
+            OutputData{rename: Some("УДАЛИТЬ..............."),                  moving: Moving::DeleteMatches, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1")},
         ];
         // В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
         // В PART_1 мы перечислили, то чему хотели задать порядок заранее, но есть столбцы, где мы хотим оставить порядок, который существует в актах.
@@ -144,7 +145,7 @@ impl<'a> Report<'a> {
         // Другими словами, структура нашего отчета воспроизведет в столбцах порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
         // В итогах присутсвует два вида данных: базовые и текущие цены, таким образом получается отчет будет написан из 3 частей.
 
-        let vec_1: Vec<OutputData> = LIST.into_iter().filter(|outputdata| outputdata.moving == Moving::No || outputdata.moving == Moving::Move).collect();
+        let vec_1: Vec<OutputData> = list.into_iter().filter(|outputdata| outputdata.moving == Moving::No || outputdata.moving == Moving::Move).collect();
         let part_main = PrintPart::new(vec_1).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
 
         Report {
@@ -189,7 +190,7 @@ impl<'a> Report<'a> {
         // ниже итерация через "for" т.к. обработка ошибок со знаком "?" отклоняет калькулирующие замыкания итератеров такие как "fold"
         for item in self.part_main.vector.iter() {
             match item.moving {
-                Moving::Delete => continue,
+                Moving::DeleteMatches => continue,
                 Moving::AnotherVector => continue,
                 _ => (),
             }
@@ -227,24 +228,24 @@ impl<'a> Report<'a> {
             };
 
             if let Some(col) = get_column(Source::AtBasePrices(&item.name)) {
-                Self::write_totals(item, &mut sh, self.empty_row, col);
+                write_number(&mut sh, self.empty_row, col, item.base_price[0].unwrap_or(0.), None);
             }
 
             if let Some(col) = get_column(Source::AtCurrPrices(&item.name)) {
-                Self::write_totals(item, &mut sh, self.empty_row, col);
+                write_number(&mut sh, self.empty_row, col, item.curr_price[0].unwrap_or(0.), None);
             }
         }
 
         Ok(())
     }
-    fn write_totals(
-        totalsrow: &TotalsRow,
-        sh: &mut Worksheet,
-        row: u32,
-        col: u16,
-    ) -> Result<(), String> {
-        write_number(sh, row, col, totalsrow.base_price[0].unwrap_or(0.), None)
-    }
+    // fn write_totals(
+    // //     totalsrow: &TotalsRow,
+    // //     sh: &mut Worksheet,
+    // //     row: u32,
+    // //     col: u16,
+    // // ) -> Result<(), String> {
+    // //     write_number(sh, row, col, totalsrow.base_price[0].unwrap_or(0.), None)
+    // }
 
     fn other_print_parts(
         sample: &'a Act,
@@ -314,7 +315,7 @@ impl<'a> Report<'a> {
 
                 if let Some(y) = get_outputdata(
                     &exclude_from_curr,
-                    &smpl_totalsrow.current_price,
+                    &smpl_totalsrow.curr_price,
                     Source::AtCurrPrices(&smpl_totalsrow.name),
                 ) {
                     acc.1.push(y)
@@ -414,15 +415,21 @@ impl<'a> Report<'a> {
             .get_worksheet("Result")
             .unwrap();
 
-        let header = self
+        let first_row = self
             .part_main
             .vector
             .iter()
             .chain(self.part_base.as_ref().unwrap().vector.iter())
             .chain(self.part_curr.as_ref().unwrap().vector.iter());
 
-        header.fold(0, |mut acc, outputdata| {
-            let name = match outputdata.rename {
+        first_row.fold(0, |mut acc, outputdata| {
+            let prefix = match outputdata.source {
+                Source::AtBasePrices(_) => Some("БЦ"),
+                Source::AtCurrPrices(_) => Some("TЦ"),
+                _ => None,                
+            };
+
+            let ending = match outputdata.rename {
                 Some(x) => x,
                 _ => match outputdata.source {
                     Source::InTableHeader(x) => x,
@@ -431,9 +438,16 @@ impl<'a> Report<'a> {
                     Source::AtCurrPrices(x) => x,
                 },
             };
+
+            let name = if prefix.is_some() {
+                prefix.unwrap().to_owned() + " " + ending
+            } else {
+                ending.to_owned()
+            };
+
             (0..outputdata.expected_columns).for_each(|exp_col| {
                 // println!("{}", acc);
-                write_string(&mut sh, 0, acc, name, None);
+                write_string(&mut sh, 0, acc, &name, None);
             });
             acc + outputdata.expected_columns
         });
