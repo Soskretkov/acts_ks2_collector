@@ -12,7 +12,6 @@ pub struct OutputData<'a> {
 
 pub enum Moving {
     No,
-    AnotherVector,
     Move,
     Delete,
 }
@@ -120,7 +119,7 @@ fn PrintPart_test() {
             OutputData{rename: None,                           moving: Moving::Move, expected_columns: 3, source: Source::AtBasePrices("Эксплуатация машин", Matches::Exact)},
             OutputData{rename: None,                           moving: Moving::Move, expected_columns: 4, source: Source::AtBasePrices("Накладные расходы", Matches::Contains)},
             OutputData{rename: None,                           moving: Moving::Move, expected_columns: 5, source: Source::AtCurrPrices("Накладные расходы и доходы", Matches::Contains)},
-            OutputData{rename: Some("РЕНЕЙМ................"), moving: Moving::AnotherVector, expected_columns: 6, source: Source::AtCurrPrices("Производство работ в зимнее время 4%", Matches::Exact)},
+            OutputData{rename: Some("РЕНЕЙМ................"), moving: Moving::No, expected_columns: 6, source: Source::AtCurrPrices("Производство работ в зимнее время 4%", Matches::Exact)},
             OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::Delete, expected_columns: 7, source: Source::AtCurrPrices("Производство работ в зимнее время 4%", Matches::Exact)},
             OutputData{rename: None,                           moving: Moving::Move,   expected_columns: 8, source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)", Matches::Exact)},
         ];
@@ -179,7 +178,7 @@ impl<'a> Report<'a> {
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
             OutputData{rename: None,                                        moving: Moving::Delete, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
-            OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::AnotherVector, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
+            OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
             OutputData{rename: Some("УДАЛИТЬ..............."),                  moving: Moving::Delete, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1", Matches::Exact)},
         ];
         // В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
@@ -240,7 +239,7 @@ impl<'a> Report<'a> {
         for item in self.part_main.vector.iter() {
             match item.moving {
                 Moving::Delete => continue,
-                Moving::AnotherVector => continue,
+                Moving::No => continue,
                 _ => (),
             }
 
@@ -427,77 +426,45 @@ impl<'a> Report<'a> {
         println!("curr {}", exclude_from_curr.len());
         let get_outputdata = |exclude: &[&OutputData<'a>],
                               price: &[Option<f64>],
-                              src: Source<'a>|
+                              source: Source<'a>|
          -> Option<OutputData<'a>> {
-            let name = match src {
-                Source::AtBasePrices(words, _) => words,
-                Source::AtCurrPrices(words, _) => words,
+            let (name, _) = match &source {
+                Source::AtBasePrices(words, matches) => (words, matches),
+                Source::AtCurrPrices(words, matches) => (words, matches),
                 _ => unreachable!("операция не над строками, которые встречаются в итогах акта"),
             };
+            let mut not_listed = true;
             let mut it_another_vector = false;
-            let mut not_listed = false;
             let mut new_name = None;
 
-            'outer: loop {
-                for item in exclude.iter() {
-                    match item {
-                        OutputData {
-                            rename: set_name,
-                            moving: Moving::AnotherVector,
-                            source:
-                                Source::AtBasePrices(text, Matches::Exact)
-                                | Source::AtCurrPrices(text, Matches::Exact),
-                            ..
-                        } if *text == name => {
-                            it_another_vector = true;
-                            not_listed = false;
-                            new_name = *set_name;
-                println!("{}", name);
-                            break 'outer;
-                        }
-                        _ => (),
-                    };
-                }
-                for item in exclude.iter() {
-                    match item {
-                        OutputData {
-                            rename: set_name,
-                            moving: Moving::AnotherVector,
-                            source:
-                                Source::AtBasePrices(text, Matches::Contains)
-                                | Source::AtCurrPrices(text, Matches::Contains),
-                            ..
-                        } if name.contains(*text) => {
-                            it_another_vector = true;
-                            not_listed = false;
-                            new_name = *set_name;
-                println!("{}", name);
-                            break 'outer;
-                        }
-                        _ => (),
-                    };
-                }
-                for item in exclude.iter() {
-                    match item {
-                        OutputData {
-                            source: Source::AtBasePrices(text, _),
-                            ..
-                        } if *text == name => {
-                            not_listed = false;
-                println!("{}", name);
-                            break 'outer;
-                        }
-                        OutputData {
-                            source: Source::AtCurrPrices(text, _),
-                            ..
-                        } if *text == name => {
-                            not_listed = false;
-                            break 'outer;
-                        }
-                        _ => (),
+            for item in exclude.iter() {
+                match item {
+                    OutputData {
+                        rename: set_name,
+                        moving: Moving::No,
+                        source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
+                        ..
+                    } if text == name || (m == &Matches::Contains && name.contains(text)) => {
+                        not_listed = false;
+                        it_another_vector = true;
+                        new_name = *set_name;
+                        println!("Этот нашелся: {} (теперь ищем следующий)", name);
+                        break;
                     }
+                    _ => (),
+                };
+                match item {
+                    OutputData {
+                        source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
+                        ..
+                    } if not_listed
+                        && (text == name || (m == &Matches::Contains && name.contains(text))) =>
+                    {
+                        not_listed = false;
+                        println!("Этот listed: {} (продолжаем смотреть)", name);
+                    }
+                    _ => (),
                 }
-                break;
             }
 
             if it_another_vector || not_listed {
@@ -507,7 +474,7 @@ impl<'a> Report<'a> {
                     rename: new_name,
                     moving: Moving::No,
                     expected_columns: columns_min,
-                    source: src,
+                    source,
                 };
 
                 return Some(outputdata);
