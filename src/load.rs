@@ -3,7 +3,7 @@ use xlsxwriter::{Format, Workbook, Worksheet};
 
 #[derive(Debug)]
 pub struct OutputData<'a> {
-    pub rename: Option<&'a str>,
+    pub rename: Option<&'static str>,
     pub moving: Moving,
     pub expected_columns: u16,
     pub source: Source<'a>,
@@ -436,6 +436,7 @@ impl<'a> Report<'a> {
             let mut not_listed = true;
             let mut it_another_vector = false;
             let mut new_name = None;
+            let mut matches: Matches;
 
             for item in exclude.iter() {
                 match item {
@@ -448,6 +449,10 @@ impl<'a> Report<'a> {
                         not_listed = false;
                         it_another_vector = true;
                         new_name = *set_name;
+                        matches = match *m {
+                            Matches::Exact=> Matches::Exact,
+                            Matches::Contains => Matches::Contains,
+                        };
                         println!("Этот нашелся: {} (теперь ищем следующий)", name);
                         break;
                     }
@@ -493,13 +498,13 @@ impl<'a> Report<'a> {
                     acc.0.push(x)
                 };
 
-                if let Some(y) = get_outputdata(
-                    &exclude_from_curr,
-                    &smpl_totalsrow.curr_price,
-                    Source::AtCurrPrices(&smpl_totalsrow.name, Matches::Exact),
-                ) {
-                    acc.1.push(y)
-                };
+                // if let Some(y) = get_outputdata(
+                //     &exclude_from_curr,
+                //     &smpl_totalsrow.curr_price,
+                //     Source::AtCurrPrices(&smpl_totalsrow.name, Matches::Exact),
+                // ) {
+                //     acc.1.push(y)
+                // };
 
                 acc
             },
