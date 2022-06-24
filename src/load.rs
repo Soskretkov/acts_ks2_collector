@@ -422,63 +422,79 @@ impl<'a> Report<'a> {
             .filter(|outputdata| matches!(outputdata.source, Source::AtCurrPrices(_, _)))
             .collect::<Vec<_>>();
 
-        println!("base {}", exclude_from_base.len());
-        println!("curr {}", exclude_from_curr.len());
         let get_outputdata = |exclude: &[&OutputData<'a>],
-                              price: &[Option<f64>],
-                              source: Source<'a>|
+                              totalsrow: &'a TotalsRow,
+                              kind: &str|
          -> Option<OutputData<'a>> {
-            let (name, _) = match &source {
-                Source::AtBasePrices(words, matches) => (words, matches),
-                Source::AtCurrPrices(words, matches) => (words, matches),
-                _ => unreachable!("операция не над строками, которые встречаются в итогах акта"),
-            };
+            let name = &totalsrow.name;
+
             let mut not_listed = true;
             let mut it_another_vector = false;
-            let mut new_name = None;
-            let mut matches: Matches;
+            let mut rename = None;
+            let mut matches = Matches::Exact;
+            let mut moving = Moving::No;
 
             for item in exclude.iter() {
                 match item {
                     OutputData {
                         rename: set_name,
-                        moving: Moving::No,
+                        moving: Moving::No, //просто вписать сюда переменную moving нерабочая идея
                         source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
                         ..
-                    } if text == name || (m == &Matches::Contains && name.contains(text)) => {
+                    } if *text == name || (m == &Matches::Contains && name.contains(text)) => {
                         not_listed = false;
                         it_another_vector = true;
-                        new_name = *set_name;
-                        matches = match *m {
-                            Matches::Exact=> Matches::Exact,
-                            Matches::Contains => Matches::Contains,
-                        };
-                        println!("Этот нашелся: {} (теперь ищем следующий)", name);
+                        rename = *set_name;
+                        if m == &Matches::Contains {
+                            matches = Matches::Contains;
+                        }
+                        println!(
+                            "other_print_parts: нашел '{}', переходит к следующему элементу",
+                            name
+                        );
                         break;
                     }
-                    _ => (),
-                };
-                match item {
                     OutputData {
                         source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
                         ..
                     } if not_listed
-                        && (text == name || (m == &Matches::Contains && name.contains(text))) =>
+                        && (*text == name || (m == &Matches::Contains && name.contains(text))) =>
                     {
                         not_listed = false;
-                        println!("Этот listed: {} (продолжаем смотреть)", name);
+                        moving = item.moving.clone();
+                        if m == &Matches::Contains {
+                            matches = Matches::Contains;
+                        }
+                        println!(
+                            "other_print_parts: заметил: '{}', продолжает смотреть варианты",
+                            name
+                        );
                     }
                     _ => (),
                 }
             }
 
             if it_another_vector || not_listed {
-                let columns_min = price.iter().map(Option::is_some).count() as u16;
+                let expected_columns = match kind {
+                    "base" => totalsrow.base_price.iter().map(Option::is_some).count() as u16,
+                    "curr" => totalsrow.curr_price.iter().map(Option::is_some).count() as u16,
+                    _ => {
+                        unreachable!("операция не над строками, которые встречаются в итогах акта")
+                    }
+                };
+
+                let source = match kind {
+                    "base" => Source::AtBasePrices(&totalsrow.name, matches),
+                    "curr" => Source::AtCurrPrices(&totalsrow.name, matches),
+                    _ => {
+                        unreachable!("операция не над строками, которые встречаются в итогах акта")
+                    }
+                };
 
                 let outputdata = OutputData {
-                    rename: new_name,
-                    moving: Moving::No,
-                    expected_columns: columns_min,
+                    rename,
+                    moving,
+                    expected_columns,
                     source,
                 };
 
@@ -490,22 +506,13 @@ impl<'a> Report<'a> {
         let (part_base, part_curr) = sample.data_of_totals.iter().fold(
             (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
             |mut acc, smpl_totalsrow| {
-                if let Some(x) = get_outputdata(
-                    &exclude_from_base,
-                    &smpl_totalsrow.base_price,
-                    Source::AtBasePrices(&smpl_totalsrow.name, Matches::Exact),
-                ) {
+                if let Some(x) = get_outputdata(&exclude_from_base, &smpl_totalsrow, "base") {
                     acc.0.push(x)
                 };
 
-                // if let Some(y) = get_outputdata(
-                //     &exclude_from_curr,
-                //     &smpl_totalsrow.curr_price,
-                //     Source::AtCurrPrices(&smpl_totalsrow.name, Matches::Exact),
-                // ) {
-                //     acc.1.push(y)
-                // };
-
+                if let Some(y) = get_outputdata(&exclude_from_curr, &smpl_totalsrow, "curr") {
+                    acc.1.push(y)
+                };
                 acc
             },
         );
