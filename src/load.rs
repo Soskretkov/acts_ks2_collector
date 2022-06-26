@@ -48,7 +48,7 @@ impl<'a> PrintPart<'a> {
         self.total_col
     }
 
-    pub fn get_column(&self, src: &Source<'a>) -> Option<(u16, u16)> {
+    pub fn get_column(&self, src: &Source<'a>) -> Option<(usize, u16)> {
         let (name, matches) = match src {
             Source::AtBasePrices(words, matches) => (words, matches),
             Source::AtCurrPrices(words, matches) => (words, matches),
@@ -58,6 +58,7 @@ impl<'a> PrintPart<'a> {
         };
 
         let mut counter = 0;
+        let mut index = 0;
         for outputdata in self.vector.iter() {
             // println!("{counter}: {:?}", outputdata.source);
             match outputdata {
@@ -69,7 +70,7 @@ impl<'a> PrintPart<'a> {
                     && m == &Matches::Exact
                     && name == text =>
                 {
-                    return Some((counter, outputdata.expected_columns));
+                    return Some((index, counter));
                 }
                 OutputData {
                     source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
@@ -79,10 +80,11 @@ impl<'a> PrintPart<'a> {
                     && m == &Matches::Contains
                     && name.contains(text) =>
                 {
-                    return Some((counter, outputdata.expected_columns));
+                    return Some((index, counter));
                 }
                 OutputData { moving: mov, .. } => {
                     if mov == &Moving::No || mov == &Moving::Yes {
+                        index += 1;
                         counter += outputdata.expected_columns;
                     }
                 }
@@ -119,14 +121,14 @@ fn PrintPart_test() {
 
     assert_eq!(&29, &printpart.get_number_of_columns());
     assert_eq!(
-        Some((21, 8)),
+        Some((6, 21)),
         printpart.get_column(&Source::AtCurrPrices(
             "Стоимость материальных ресурсов (всего)",
             Matches::Exact
         ))
     );
     assert_eq!(
-        Some((10, 5)),
+        Some((4, 10)),
         printpart.get_column(&Source::AtCurrPrices(
             "Накладные расходы",
             Matches::Contains
@@ -261,6 +263,7 @@ impl<'a> Report<'a> {
             );
         }
         self.empty_row += 1;
+        sh.col
         Ok(())
     }
     fn write_header(
@@ -369,70 +372,76 @@ impl<'a> Report<'a> {
         sh: &mut Worksheet,
         row: u32,
     ) {
-        let get_column = |source: Source, len: usize| {
-            let column_number_in_totals_vector = match source {
-                Source::AtBasePrices(_, _) => part_base.get_column(&source),
-                Source::AtCurrPrices(_, _) => match part_curr.get_column(&source) {
-                    Some((x, y)) => Some((x + part_base.total_col, y)),
-                    None => None,
-                },
-                _ => unreachable!("операция не над строками, которые встречаются в итогах акта"),
+        let get_part = |source: Source| {
+            let (part, column_information, corr) = match source {
+                Source::AtBasePrices(_, _) => ("base", part_base.get_column(&source), 0),
+                Source::AtCurrPrices(_, _) => {
+                    ("curr", part_curr.get_column(&source), part_base.total_col)
+                }
+                _ => unreachable!("операция не над итоговыми строками акта"),
             };
 
-            match column_number_in_totals_vector {
-                Some((x, y)) => Some((x + part_main.total_col, y)),
+            match column_information {
+                Some((index, col_number_in_vec)) => {
+                    return Some((part, corr + part_main.total_col, index, col_number_in_vec))
+                }
                 _ => match part_main.get_column(&source) {
-                    Some(x) => Some(x),
+                    Some((index, col_number_in_vec)) => {
+                        return Some(("main", corr + part_main.total_col, index, col_number_in_vec))
+                    }
                     _ => None,
                 },
             }
         };
 
 
+        let column_information = get_part(Source::AtBasePrices(&totalsrow.name, Matches::Exact));
 
-
-
-
-        // if let Some((col, _)) = get_column(Source::AtBasePrices(&totalsrow.name, Matches::Exact), totalsrow.base_price.len()) {
-        // // if totalsrow.base_price.len() >
+        if let Some((part, corr, index, col_number_in_vec)) = column_information {
+            let len = totalsrow.base_price.len() as u16;
+            let expected_columns = part_main.vector[index].expected_columns;
+            if len > expected_columns {
+                let difference = len - expected_columns;
+                part_main.vector[index].expected_columns + difference;
         
+                fn foo() {}
+            }
         
 
+            write_number(
+                sh,
+                row,
+                corr + col_number_in_vec,
+                totalsrow.base_price[0].unwrap_or(1234567890.),
+                None,
+            );
+        } else if let Some((part, corr, index, col_number_in_vec)) =
+            get_part(Source::AtBasePrices(&totalsrow.name, Matches::Contains))
+        {
+            write_number(
+                sh,
+                row,
+                corr + col_number_in_vec,
+                totalsrow.base_price[0].unwrap_or(1234567890.),
+                None,
+            );
+        }
 
+        // if let Some((_, corr, col, _)) = get_part(Source::AtCurrPrices(&totalsrow.name, Matches::Exact)) {
         //     write_number(
         //         sh,
         //         row,
-        //         col,
-        //         totalsrow.base_price[0].unwrap_or(1234567890.),
-        //         None,
-        //     );
-        // } else if let Some(col) =
-        //     get_column(Source::AtBasePrices(&totalsrow.name, Matches::Contains) totalsrow.base_price.len())
-        // {
-        //     write_number(
-        //         sh,
-        //         row,
-        //         col,
-        //         totalsrow.base_price[0].unwrap_or(1234567890.),
-        //         None,
-        //     );
-        // }
-
-        // if let Some(col) = get_column(Source::AtCurrPrices(&totalsrow.name, Matches::Exact)) {
-        //     write_number(
-        //         sh,
-        //         row,
-        //         col,
+        //         corr + col,
         //         totalsrow.curr_price[0].unwrap_or(1234567890.),
         //         None,
         //     );
-        // } else if let Some(col) =
-        //     get_column(Source::AtCurrPrices(&totalsrow.name, Matches::Contains))
+        // } else if let Some((_, corr, col, _)) =
+        //     get_part(Source::AtCurrPrices(&totalsrow.name, Matches::Contains))
         // {
         //     write_number(
         //         sh,
         //         row,
-        //         col,
+        //         corr + col,
         //         totalsrow.curr_price[0].unwrap_or(1234567890.),
         //         None,
         //     );
@@ -521,7 +530,7 @@ impl<'a> Report<'a> {
                     "base" => totalsrow.base_price.iter().map(Option::is_some).count() as u16,
                     "curr" => totalsrow.curr_price.iter().map(Option::is_some).count() as u16,
                     _ => {
-                        unreachable!("операция не над строками, которые встречаются в итогах акта")
+                        unreachable!("операция не над итоговыми строками акта")
                     }
                 };
 
@@ -529,7 +538,7 @@ impl<'a> Report<'a> {
                     "base" => Source::AtBasePrices(&totalsrow.name, matches),
                     "curr" => Source::AtCurrPrices(&totalsrow.name, matches),
                     _ => {
-                        unreachable!("операция не над строками, которые встречаются в итогах акта")
+                        unreachable!("операция не над итоговыми строками акта")
                     }
                 };
 
@@ -560,7 +569,7 @@ impl<'a> Report<'a> {
         );
         (part_base, part_curr)
     }
-    pub fn finish_writing(&mut self) -> Option<Workbook> {
+    pub fn end(&mut self) -> Option<Workbook> {
         let mut sh = self
             .book
             .as_ref()
