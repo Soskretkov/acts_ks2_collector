@@ -3,11 +3,11 @@ use acts_ks2_etl::variant_eq;
 use xlsxwriter::{Format, Workbook, Worksheet};
 
 #[derive(Debug)]
-pub struct OutputData<'a> {
+pub struct OutputData {
     pub rename: Option<&'static str>,
     pub moving: Moving,
     pub expected_columns: u16,
-    pub source: Source<'a>,
+    pub source: Source,
 }
 #[derive(Debug, Clone, PartialEq)]
 
@@ -17,7 +17,7 @@ pub enum Moving {
     Del,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Matches {
     Exact,
     Contains,
@@ -25,20 +25,20 @@ pub enum Matches {
 
 // Четыре вида данных на выходе: в готовом виде в шапке, в готов виде в итогах акта (2 варанта), и нет готовых (нужно расчитать программой):
 #[derive(Debug, PartialEq)]
-pub enum Source<'a> {
+pub enum Source {
     InTableHeader(&'static str),
-    AtCurrPrices(&'a str, Matches),
-    AtBasePrices(&'a str, Matches),
+    AtCurrPrices(String, Matches),
+    AtBasePrices(String, Matches),
     Calculate(&'static str),
 }
 
 #[derive(Debug)]
-pub struct PrintPart<'a> {
-    vector: Vec<OutputData<'a>>,
+pub struct PrintPart {
+    vector: Vec<OutputData>,
     total_col: u16,
 }
 
-impl<'a> PrintPart<'a> {
+impl<'a> PrintPart {
     pub fn new(vector: Vec<OutputData>) -> Option<PrintPart> {
         let total_col = Self::count_col(&vector);
 
@@ -48,13 +48,11 @@ impl<'a> PrintPart<'a> {
         self.total_col
     }
 
-    pub fn get_column(&self, src: &Source<'a>) -> Option<(usize, u16)> {
-        let (name, matches) = match src {
-            Source::AtBasePrices(words, matches) => (words, matches),
-            Source::AtCurrPrices(words, matches) => (words, matches),
-            _ => unreachable!(
-                "функция get_column только для строк, которые встречаются в итогах акта"
-            ),
+    pub fn get_column(&self, kind: &str, name: &str, matches: Matches) -> Option<(usize, u16)> {
+        let src = match kind {
+            "base" => Source::AtBasePrices("".to_string(), matches.clone()),
+            "curr" => Source::AtCurrPrices("".to_string(), matches.clone()),
+            _ => unreachable!("операция не над итоговыми строками акта"),
         };
 
         let mut counter = 0;
@@ -66,7 +64,7 @@ impl<'a> PrintPart<'a> {
                     source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
                     ..
                 } if acts_ks2_etl::variant_eq(&outputdata.source, &src)
-                    && variant_eq(m, matches)
+                    && variant_eq(m, &matches)
                     && m == &Matches::Exact
                     && name == text =>
                 {
@@ -76,7 +74,7 @@ impl<'a> PrintPart<'a> {
                     source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
                     ..
                 } if acts_ks2_etl::variant_eq(&outputdata.source, &src)
-                    && variant_eq(m, matches)
+                    && variant_eq(m, &matches)
                     && m == &Matches::Contains
                     && name.contains(text) =>
                 {
@@ -109,49 +107,49 @@ fn PrintPart_test() {
     #[rustfmt::skip]
         let vec_to_test = vec![
             OutputData{rename: None,                           moving: Moving::No,  expected_columns: 1,  source: Source::InTableHeader("Объект")},
-            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 2,  source: Source::AtBasePrices("Накладные расходы", Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 3,  source: Source::AtBasePrices("Эксплуатация машин", Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 4,  source: Source::AtCurrPrices("Накладные расходы", Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 5,  source: Source::AtCurrPrices("Накладные", Matches::Contains)},
-            OutputData{rename: Some("РЕНЕЙМ................"), moving: Moving::No,  expected_columns: 6,  source: Source::AtCurrPrices("Производство работ в зимнее время 4%", Matches::Exact)},
-            OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::Del, expected_columns: 99, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 8,  source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)", Matches::Exact)},
+            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 2,  source: Source::AtBasePrices("Накладные расходы".to_string(), Matches::Exact)},
+            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 3,  source: Source::AtBasePrices("Эксплуатация машин".to_string(), Matches::Exact)},
+            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 4,  source: Source::AtCurrPrices("Накладные расходы".to_string(), Matches::Exact)},
+            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 5,  source: Source::AtCurrPrices("Накладные".to_string(), Matches::Contains)},
+            OutputData{rename: Some("РЕНЕЙМ................"), moving: Moving::No,  expected_columns: 6,  source: Source::AtCurrPrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
+            OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::Del, expected_columns: 99, source: Source::AtBasePrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
+            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 8,  source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)".to_string(), Matches::Exact)},
         ];
     let printpart = PrintPart::new(vec_to_test).unwrap();
 
     assert_eq!(&29, &printpart.get_number_of_columns());
     assert_eq!(
         Some((6, 21)),
-        printpart.get_column(&Source::AtCurrPrices(
+        printpart.get_column(
+            "curr",
             "Стоимость материальных ресурсов (всего)",
             Matches::Exact
-        ))
+        )
     );
     assert_eq!(
         Some((4, 10)),
-        printpart.get_column(&Source::AtCurrPrices(
-            "Накладные расходы",
-            Matches::Contains
-        ))
+        printpart.get_column("curr", "Накладные расходы", Matches::Contains)
     );
 }
-pub struct Report<'a> {
+pub struct Report {
     pub book: Option<xlsxwriter::Workbook>,
-    pub part_main: PrintPart<'a>,
-    pub part_base: Option<PrintPart<'a>>,
-    pub part_curr: Option<PrintPart<'a>>,
+    pub part_main: PrintPart,
+    pub part_base: Option<PrintPart>,
+    pub part_curr: Option<PrintPart>,
     pub empty_row: u32,
 }
 
-// Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
-// но если какой-то акт имеет 16, 18, 0 или, скажем, 40 строк в итогах, то нужна какая-то логика, чтобы соотнести эти 40 строк одного акта
-// с 17 строками других актов. Нужно решение, как не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
-// Данные делятся на ожидаемые (им порядок можно сразу задать) и случайные.
-// Ниже массив, содержащий информацию о колонках, которые мы ожидаем получить из актов, здесь будем задавать порядок.
-// Позиция в массиве будет соответсвовать столбцу выходной формы (это крайние левые столбцы шапки):
+impl<'a> Report {
+    pub fn new(wb: xlsxwriter::Workbook) -> Report {
+        // Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
+        // но если какой-то акт имеет 16, 18, 0 или, скажем, 40 строк в итогах, то нужна какая-то логика, чтобы соотнести эти 40 строк одного акта
+        // с 17 строками других актов. Нужно решение, как не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
+        // Данные делятся на ожидаемые (им порядок можно сразу задать) и случайные.
+        // Ниже массив, содержащий информацию о колонках, которые мы ожидаем получить из актов, здесь будем задавать порядок.
+        // Позиция в массиве будет соответсвовать столбцу выходной формы (это крайние левые столбцы шапки):
 
-#[rustfmt::skip]
-        const list: [OutputData; 18] = [
+        #[rustfmt::skip]
+        let main_list: Vec<OutputData> = vec![
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Исполнитель")},
@@ -170,31 +168,28 @@ pub struct Report<'a> {
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период начало")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период окончание")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
-            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Всего с НР и СП (тек", Matches::Contains)},
-            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtCurrPrices("Всего с НР и СП (баз", Matches::Contains)},
+            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Всего с НР и СП (тек".to_string(), Matches::Contains)},
+            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtCurrPrices("Всего с НР и СП (баз".to_string(), Matches::Contains)},
             // OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
             // OutputData{rename: Some("УДАЛИТЬ..............."),                  moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1", Matches::Exact)},
             // OutputData{rename: None,                                            moving: Moving::Yes, expected_columns: 1, source: Source::AtBasePrices("ы", Matches::Contains)},
         ];
-// В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
-// В PART_1 мы перечислили, то чему хотели задать порядок заранее, но есть столбцы, где мы хотим оставить порядок, который существует в актах.
-// Чтобы продолжить, поделим отсутсвующие столбцы на два вида: соответсвующие форме акта, заданного в качестве шаблона, и те, которые в его форму не вписались.
-// Столбцы, которые будут совпадать со структурой шаблонного акта, получат приоритет и будут стремится в левое положение таблицы выстраиваясь в том же порядке что и в шаблоне.
-// Другими словами, структура нашего отчета воспроизведет в столбцах порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
-// В итогах присутсвует два вида данных: базовые и текущие цены, таким образом получается отчет будет написан из 3 частей.
-
-impl<'a> Report<'a> {
-    pub fn new(wb: xlsxwriter::Workbook) -> Report<'a> {
-        let vec_1: Vec<OutputData> = list
-            .into_iter()
-            .filter(|outputdata| {
-                outputdata.moving != Moving::Del
-                    && !(outputdata.moving == Moving::No
-                        && (matches!(outputdata.source, Source::AtBasePrices(_, _))
-                            || matches!(outputdata.source, Source::AtCurrPrices(_, _))))
-            })
-            .collect();
-        let part_main = PrintPart::new(vec_1).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
+        // В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
+        // В PART_1 мы перечислили, то чему хотели задать порядок заранее, но есть столбцы, где мы хотим оставить порядок, который существует в актах.
+        // Чтобы продолжить, поделим отсутсвующие столбцы на два вида: соответсвующие форме акта, заданного в качестве шаблона, и те, которые в его форму не вписались.
+        // Столбцы, которые будут совпадать со структурой шаблонного акта, получат приоритет и будут стремится в левое положение таблицы выстраиваясь в том же порядке что и в шаблоне.
+        // Другими словами, структура нашего отчета воспроизведет в столбцах порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
+        // В итогах присутсвует два вида данных: базовые и текущие цены, таким образом получается отчет будет написан из 3 частей.
+        // let vec_1: Vec<OutputData> = list
+        //     .into_iter()
+        //     .filter(|outputdata| {
+        //         outputdata.moving != Moving::Del
+        //             && !(outputdata.moving == Moving::No
+        //                 && (matches!(outputdata.source, Source::AtBasePrices(_, _))
+        //                     || matches!(outputdata.source, Source::AtCurrPrices(_, _))))
+        //     })
+        //     .collect();
+        let part_main = PrintPart::new(main_list).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
 
         Report {
             book: Some(wb),
@@ -207,7 +202,7 @@ impl<'a> Report<'a> {
 
     pub fn write(&mut self, act: &'a Act) -> Result<(), String> {
         if self.part_base.is_none() && self.part_curr.is_none() {
-            let (vec_base, vec_curr) = Self::other_print_parts(act, &list);
+            let (vec_base, vec_curr) = Self::other_print_parts(act, &self.part_main.vector);
             let part_base = PrintPart::new(vec_base);
             let part_curr = PrintPart::new(vec_curr);
 
@@ -371,12 +366,14 @@ impl<'a> Report<'a> {
         sh: &mut Worksheet,
         row: u32,
     ) -> Result<(), String> {
-        let get_part = |source: Source| {
-            let (part, column_information, corr) = match source {
-                Source::AtBasePrices(_, _) => ("base", part_base.get_column(&source), 0),
-                Source::AtCurrPrices(_, _) => {
-                    ("curr", part_curr.get_column(&source), part_base.total_col)
-                }
+        let get_part = |kind: &str, name: &str| {
+            let (part, column_information, corr) = match kind {
+                "base" => ("base", part_base.get_column(kind, name, Matches::Exact), 0),
+                "curr" => (
+                    "curr",
+                    part_curr.get_column(kind, name, Matches::Exact),
+                    part_base.total_col,
+                ),
                 _ => unreachable!("операция не над итоговыми строками акта"),
             };
 
@@ -384,7 +381,7 @@ impl<'a> Report<'a> {
                 Some((index, col_number_in_vec)) => {
                     return Some((part, corr + part_main.total_col, index, col_number_in_vec))
                 }
-                _ => match part_main.get_column(&source) {
+                _ => match part_main.get_column(kind, name, Matches::Exact) {
                     Some((index, col_number_in_vec)) => {
                         return Some(("main", corr + part_main.total_col, index, col_number_in_vec))
                     }
@@ -419,8 +416,8 @@ impl<'a> Report<'a> {
                 Ok(())
             };
 
-        let write_base = get_part(Source::AtBasePrices(&totalsrow.name, Matches::Exact));
-        let write_curr = get_part(Source::AtCurrPrices(&totalsrow.name, Matches::Exact));
+        let write_base = get_part("base", &totalsrow.name);
+        let write_curr = get_part("curr", &totalsrow.name);
         write_if_some(write_base)?;
         write_if_some(write_curr)?;
         Ok(())
@@ -428,8 +425,8 @@ impl<'a> Report<'a> {
 
     fn other_print_parts(
         sample: &'a Act,
-        part_1: &[OutputData<'a>],
-    ) -> (Vec<OutputData<'a>>, Vec<OutputData<'a>>) {
+        part_1: &[OutputData],
+    ) -> (Vec<OutputData>, Vec<OutputData>) {
         let exclude_from_base = part_1
             .iter()
             .filter(|outputdata| matches!(outputdata.source, Source::AtBasePrices(_, _)))
@@ -440,10 +437,10 @@ impl<'a> Report<'a> {
             .filter(|outputdata| matches!(outputdata.source, Source::AtCurrPrices(_, _)))
             .collect::<Vec<_>>();
 
-        let get_outputdata = |exclude: &[&OutputData<'a>],
+        let get_outputdata = |exclude: &[&OutputData],
                               totalsrow: &'a TotalsRow,
                               kind: &str|
-         -> Option<OutputData<'a>> {
+         -> Option<OutputData> {
             let name = &totalsrow.name;
 
             let mut not_listed = true;
@@ -460,7 +457,7 @@ impl<'a> Report<'a> {
                             Source::AtBasePrices(text, Matches::Exact)
                             | Source::AtCurrPrices(text, Matches::Exact),
                         ..
-                    } if *text == name => {
+                    } if text == name => {
                         not_listed = false;
                         if mov == &Moving::No {
                             required = true;
@@ -480,7 +477,7 @@ impl<'a> Report<'a> {
                             Source::AtBasePrices(text, Matches::Contains)
                             | Source::AtCurrPrices(text, Matches::Contains),
                         ..
-                    } if name.contains(*text) => {
+                    } if name.contains(text) => {
                         not_listed = false;
                         if mov == &Moving::No {
                             required = true;
@@ -508,8 +505,8 @@ impl<'a> Report<'a> {
                 };
 
                 let source = match kind {
-                    "base" => Source::AtBasePrices(&totalsrow.name, matches),
-                    "curr" => Source::AtCurrPrices(&totalsrow.name, matches),
+                    "base" => Source::AtBasePrices(totalsrow.name.clone(), matches),
+                    "curr" => Source::AtCurrPrices(totalsrow.name.clone(), matches),
                     _ => {
                         unreachable!("операция не над итоговыми строками акта")
                     }
@@ -554,6 +551,12 @@ impl<'a> Report<'a> {
             .part_main
             .vector
             .iter()
+            .filter(|outputdata| {
+                outputdata.moving != Moving::Del
+                    && !(outputdata.moving == Moving::No
+                        && (matches!(outputdata.source, Source::AtBasePrices(_, _))
+                            || matches!(outputdata.source, Source::AtCurrPrices(_, _))))
+            })
             .chain(self.part_base.as_ref().unwrap().vector.iter())
             .chain(self.part_curr.as_ref().unwrap().vector.iter());
 
@@ -565,19 +568,20 @@ impl<'a> Report<'a> {
             };
 
             let ending = match outputdata.rename {
-                Some(x) => x,
-                _ => match outputdata.source {
+                Some(x) => x.to_owned(),
+                _ => match &outputdata.source {
                     Source::InTableHeader(x) => x,
                     Source::Calculate(x) => x,
-                    Source::AtBasePrices(x, _) => x,
-                    Source::AtCurrPrices(x, _) => x,
-                },
+                    Source::AtBasePrices(x, _) => &x[..],
+                    Source::AtCurrPrices(x, _) => &x[..],
+                }
+                .to_owned(),
             };
 
             let name = if prefix.is_some() {
-                prefix.unwrap().to_owned() + " " + ending
+                prefix.unwrap().to_owned() + " " + &ending
             } else {
-                ending.to_owned()
+                ending
             };
 
             (0..outputdata.expected_columns).for_each(|exp_col| {
