@@ -172,9 +172,9 @@ pub struct Report<'a> {
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Всего с НР и СП (тек", Matches::Contains)},
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtCurrPrices("Всего с НР и СП (баз", Matches::Contains)},
-            // OutputData{rename: Some("РЕНЕЙМ................"),                      moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
-            // OutputData{rename: Some("УДАЛИТЬ..............."),                      moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1", Matches::Exact)},
-            // OutputData{rename: None,                                                moving: Moving::Yes, expected_columns: 1, source: Source::AtBasePrices("ы", Matches::Contains)},
+            // OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
+            // OutputData{rename: Some("УДАЛИТЬ..............."),                  moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1", Matches::Exact)},
+            // OutputData{rename: None,                                            moving: Moving::Yes, expected_columns: 1, source: Source::AtBasePrices("ы", Matches::Contains)},
         ];
 // В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
 // В PART_1 мы перечислили, то чему хотели задать порядок заранее, но есть столбцы, где мы хотим оставить порядок, который существует в актах.
@@ -256,8 +256,8 @@ impl<'a> Report<'a> {
             Self::write_totals(
                 totalsrow,
                 &self.part_main,
-                self.part_base.as_mut().unwrap(),
-                self.part_curr.as_mut().unwrap(),
+                self.part_base.as_ref().unwrap(),
+                self.part_curr.as_ref().unwrap(),
                 &mut sh,
                 self.empty_row,
             );
@@ -366,8 +366,8 @@ impl<'a> Report<'a> {
     fn write_totals(
         totalsrow: &TotalsRow,
         part_main: &PrintPart,
-        part_base: &mut PrintPart,
-        part_curr: &mut PrintPart,
+        part_base: &PrintPart,
+        part_curr: &PrintPart,
         sh: &mut Worksheet,
         row: u32,
     ) {
@@ -393,58 +393,34 @@ impl<'a> Report<'a> {
             }
         };
 
-
-        let column_information = get_part(Source::AtBasePrices(&totalsrow.name, Matches::Exact));
-
-        if let Some((part, corr, index, col_number_in_vec)) = column_information {
-            let len = totalsrow.base_price.len() as u16;
-            let expected_columns = part_main.vector[index].expected_columns;
-            if len > expected_columns {
-                let difference = len - expected_columns;
-                part_main.vector[index].expected_columns + difference;
-        
-                fn foo() {}
+        let mut write_if_some = |column_info: Option<(&str, u16, usize, u16)>| {
+            if let Some((part, corr, index, col_number_in_vec)) = column_info {
+                let (totalsrow_vec, part) = match part {
+                    "base" => (&totalsrow.base_price, part_base),
+                    "curr" => (&totalsrow.curr_price, part_curr),
+                    _ => unreachable!("операция не над итоговыми строками акта"),
+                };
+                let min_number_of_col =
+                    (part.vector[index].expected_columns as usize).min(totalsrow_vec.len());
+                for number_of_col in 0..min_number_of_col {
+                    let number = totalsrow_vec[number_of_col];
+                    if let Some(number) = number {
+                        write_number(
+                            sh,
+                            row,
+                            col_number_in_vec + corr + number_of_col as u16,
+                            number,
+                            None,
+                        );
+                    }
+                }
             }
-        
+        };
 
-            write_number(
-                sh,
-                row,
-                corr + col_number_in_vec,
-                totalsrow.base_price[0].unwrap_or(1234567890.),
-                None,
-            );
-        } else if let Some((part, corr, index, col_number_in_vec)) =
-            get_part(Source::AtBasePrices(&totalsrow.name, Matches::Contains))
-        {
-            write_number(
-                sh,
-                row,
-                corr + col_number_in_vec,
-                totalsrow.base_price[0].unwrap_or(1234567890.),
-                None,
-            );
-        }
-
-        // if let Some((_, corr, col, _)) = get_part(Source::AtCurrPrices(&totalsrow.name, Matches::Exact)) {
-        //     write_number(
-        //         sh,
-        //         row,
-        //         corr + col,
-        //         totalsrow.curr_price[0].unwrap_or(1234567890.),
-        //         None,
-        //     );
-        // } else if let Some((_, corr, col, _)) =
-        //     get_part(Source::AtCurrPrices(&totalsrow.name, Matches::Contains))
-        // {
-        //     write_number(
-        //         sh,
-        //         row,
-        //         corr + col,
-        //         totalsrow.curr_price[0].unwrap_or(1234567890.),
-        //         None,
-        //     );
-        // }
+        let write_base = get_part(Source::AtBasePrices(&totalsrow.name, Matches::Exact));
+        let write_curr = get_part(Source::AtCurrPrices(&totalsrow.name, Matches::Exact));
+        write_if_some(write_base);
+        write_if_some(write_curr);
     }
 
     fn other_print_parts(
@@ -461,7 +437,6 @@ impl<'a> Report<'a> {
             .filter(|outputdata| matches!(outputdata.source, Source::AtCurrPrices(_, _)))
             .collect::<Vec<_>>();
 
-        // dbg!(&exclude_from_curr);
         let get_outputdata = |exclude: &[&OutputData<'a>],
                               totalsrow: &'a TotalsRow,
                               kind: &str|
@@ -516,18 +491,14 @@ impl<'a> Report<'a> {
                         break;
                     }
                     _ => (),
-                    // println!(
-                    //             "other_print_parts: ищет '{}'",
-                    //             name
-                    //         ),
                 }
             }
 
             if required || not_listed {
                 let moving = Moving::No;
                 let expected_columns = match kind {
-                    "base" => totalsrow.base_price.iter().map(Option::is_some).count() as u16,
-                    "curr" => totalsrow.curr_price.iter().map(Option::is_some).count() as u16,
+                    "base" => totalsrow.base_price.len() as u16,
+                    "curr" => totalsrow.curr_price.len() as u16,
                     _ => {
                         unreachable!("операция не над итоговыми строками акта")
                     }

@@ -79,12 +79,12 @@ impl Sheet {
             .data
             .worksheet_range(sheetname)
             .ok_or(ErrDescription {
-                name: ErrName::calamine_sheet_of_the_book_is_undetectable,
+                name: ErrName::Calamine_sheet_of_the_book_is_undetectable,
                 description: None,
             })?
             .or_else(|error| {
                 Err(ErrDescription {
-                    name: ErrName::calamine_sheet_of_the_book_is_unreadable(error),
+                    name: ErrName::Calamine_sheet_of_the_book_is_unreadable(error),
                     description: None,
                 })
             })?;
@@ -124,7 +124,7 @@ impl Sheet {
             .2;
 
         search_points.get(test).ok_or(ErrDescription {
-            name: ErrName::sheet_not_contain_all_necessary_data,
+            name: ErrName::Sheet_not_contain_all_necessary_data,
             description: None,
         });
 
@@ -153,13 +153,13 @@ impl Sheet {
             == expected_sum_of_requir_col
         {
             return Err(ErrDescription {
-                name: ErrName::shifted_columns_in_header,
+                name: ErrName::Shifted_columns_in_header,
                 description: None,
             });
         }
 
         let range_start_u32 = data.start().ok_or(ErrDescription {
-            name: ErrName::calamine_sheet_of_the_book_is_undetectable,
+            name: ErrName::Calamine_sheet_of_the_book_is_undetectable,
             description: None,
         })?;
 

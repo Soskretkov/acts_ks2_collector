@@ -6,11 +6,11 @@ use std::error::Error;
 // }
 
 pub enum ErrName {
-    shifted_columns_in_header,
-    sheet_not_contain_all_necessary_data,
-    calamine_sheet_of_the_book_is_undetectable,
-    calamine_sheet_of_the_book_is_unreadable(calamine::XlsxError),
-    calamine,
+    Shifted_columns_in_header,
+    Sheet_not_contain_all_necessary_data,
+    Calamine_sheet_of_the_book_is_undetectable,
+    Calamine_sheet_of_the_book_is_unreadable(calamine::XlsxError),
+    Calamine,
 }
 
 #[derive(Debug)]
