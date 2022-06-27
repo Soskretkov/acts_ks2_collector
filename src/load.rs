@@ -263,7 +263,6 @@ impl<'a> Report<'a> {
             );
         }
         self.empty_row += 1;
-        sh.col
         Ok(())
     }
     fn write_header(
