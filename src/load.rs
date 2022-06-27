@@ -152,6 +152,8 @@ pub struct Report<'a> {
 
 #[rustfmt::skip]
         const list: [OutputData; 18] = [
+            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Исполнитель")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Глава")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Объект")},
@@ -168,8 +170,6 @@ pub struct Report<'a> {
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период начало")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период окончание")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
-            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Всего с НР и СП (тек", Matches::Contains)},
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtCurrPrices("Всего с НР и СП (баз", Matches::Contains)},
             // OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
@@ -370,7 +370,7 @@ impl<'a> Report<'a> {
         part_curr: &PrintPart,
         sh: &mut Worksheet,
         row: u32,
-    ) {
+    ) -> Result<(), String> {
         let get_part = |source: Source| {
             let (part, column_information, corr) = match source {
                 Source::AtBasePrices(_, _) => ("base", part_base.get_column(&source), 0),
@@ -393,34 +393,37 @@ impl<'a> Report<'a> {
             }
         };
 
-        let mut write_if_some = |column_info: Option<(&str, u16, usize, u16)>| {
-            if let Some((part, corr, index, col_number_in_vec)) = column_info {
-                let (totalsrow_vec, part) = match part {
-                    "base" => (&totalsrow.base_price, part_base),
-                    "curr" => (&totalsrow.curr_price, part_curr),
-                    _ => unreachable!("операция не над итоговыми строками акта"),
-                };
-                let min_number_of_col =
-                    (part.vector[index].expected_columns as usize).min(totalsrow_vec.len());
-                for number_of_col in 0..min_number_of_col {
-                    let number = totalsrow_vec[number_of_col];
-                    if let Some(number) = number {
-                        write_number(
-                            sh,
-                            row,
-                            col_number_in_vec + corr + number_of_col as u16,
-                            number,
-                            None,
-                        );
+        let mut write_if_some =
+            |column_info: Option<(&str, u16, usize, u16)>| -> Result<(), String> {
+                if let Some((part, corr, index, col_number_in_vec)) = column_info {
+                    let (totalsrow_vec, part) = match part {
+                        "base" => (&totalsrow.base_price, part_base),
+                        "curr" => (&totalsrow.curr_price, part_curr),
+                        _ => unreachable!("операция не над итоговыми строками акта"),
+                    };
+                    let min_number_of_col =
+                        (part.vector[index].expected_columns as usize).min(totalsrow_vec.len());
+                    for number_of_col in 0..min_number_of_col {
+                        let number = totalsrow_vec[number_of_col];
+                        if let Some(number) = number {
+                            write_number(
+                                sh,
+                                row,
+                                col_number_in_vec + corr + number_of_col as u16,
+                                number,
+                                None,
+                            )?;
+                        }
                     }
                 }
-            }
-        };
+                Ok(())
+            };
 
         let write_base = get_part(Source::AtBasePrices(&totalsrow.name, Matches::Exact));
         let write_curr = get_part(Source::AtCurrPrices(&totalsrow.name, Matches::Exact));
-        write_if_some(write_base);
-        write_if_some(write_curr);
+        write_if_some(write_base)?;
+        write_if_some(write_curr)?;
+        Ok(())
     }
 
     fn other_print_parts(
@@ -578,7 +581,7 @@ impl<'a> Report<'a> {
             };
 
             (0..outputdata.expected_columns).for_each(|exp_col| {
-                write_string(&mut sh, 0, acc, &name, None);
+                write_string(&mut sh, 0, acc + exp_col, &name, None);
             });
             acc + outputdata.expected_columns
         });

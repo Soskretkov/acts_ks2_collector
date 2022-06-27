@@ -1,4 +1,7 @@
 use xlsxwriter::Workbook;
+#[macro_use]
+extern crate error_chain;
+extern crate walkdir;
 mod extract;
 mod load;
 mod transform;
@@ -7,33 +10,57 @@ use crate::extract::{Book, Sheet, SEARCH_REFERENCE_POINTS};
 use crate::load::Report;
 use crate::transform::Act;
 
-fn main() {
+use walkdir::{DirEntry, WalkDir};
+
+error_chain! {
+    foreign_links {
+        WalkDir(walkdir::Error);
+        Io(std::io::Error);
+    }
+}
+
+fn main() -> Result<()> {
     // let (_path, _sh_name) = ui::session();
 
-    let path = "f.xlsm";
-    // let path = r"C:\Users\User\rust\acts_ks2_etl\f.xlsm";
-    let mut wb = Book::new(path).expect(&("Не удалось считать файл".to_owned() + path));
-
-    let sheet = Sheet::new(
-        &mut wb,
-        "Лист1",
-        &SEARCH_REFERENCE_POINTS,
-        29, //передается для расчета смещения столбцов. Это сумма номеров столбцов Y-типа в DESIRED_DATA_ARRAY: 0 + 0 + 3 + 5 + 9 + 9 + 3.
-    )
-    .unwrap();
-
-    let act = Act::new(sheet).unwrap();
-    let vector_of_acts: Vec<Act> = vec![act.clone(), act.clone(), act.clone()];
+    // let path = "f.xlsm";
+    let path = r"C:\Users\User\rust\acts_ks2_etl\";
+    fn is_not_temp(entry: &DirEntry) -> bool {
+        entry
+            .file_name()
+            .to_str()
+            .map(|s| !s.starts_with("~") && !s.contains('@'))
+            .unwrap_or(false)
+    }
 
     let wb = Workbook::new("Test.xlsx");
     let mut report = Report::new(wb);
+    for entry in WalkDir::new(path)
+        .into_iter()
+        .filter_map(|e| e.ok()) //будет молча пропускать каталоги, на доступ к которым у владельца запущенного процесса нет разрешения
+        .filter(|f| is_not_temp(f))
+    {
+        let f_path = entry.path().to_string_lossy();
 
-    if let Err(x) = report.write(&vector_of_acts[0]) {
-        println!("{x}");
-    };
-    let wb_2 = report.end();
-    let _ = wb_2.unwrap().close();
+        if f_path.ends_with(".xlsm") {
+            let mut file = Book::new(&f_path.to_string()).unwrap();
 
+            let sheet = Sheet::new(
+                &mut file,
+                "Лист1",
+                &SEARCH_REFERENCE_POINTS,
+                29, //передается для расчета смещения столбцов. Это сумма номеров столбцов Y-типа в DESIRED_DATA_ARRAY: 0 + 0 + 3 + 5 + 9 + 9 + 3.
+            )
+            .unwrap();
+
+            let act = Act::new(sheet).unwrap();
+
+            if let Err(x) = report.write(&act) {
+                println!("{x}");
+            };
+            let wb_2 = report.end();
+            let _ = wb_2.unwrap().close();
+        }
+    }
     // println!("{:#?}", report.part_1_just);
     // println!("{:#?}", report.part_2_base);
     // println!("{:#?}", report.part_3_curr);
@@ -85,4 +112,5 @@ fn main() {
     // for row in sheet.data.rows().skip(start_of_range.0) {
     //     println!("{:?}", row);
     // }
+    Ok(())
 }
