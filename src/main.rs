@@ -32,8 +32,6 @@ fn main() -> Result<()> {
             .unwrap_or(false)
     }
 
-    let wb = Workbook::new("Test.xlsx");
-    let mut report = Report::new(wb);
     for entry in WalkDir::new(path)
         .into_iter()
         .filter_map(|e| e.ok()) //будет молча пропускать каталоги, на доступ к которым у владельца запущенного процесса нет разрешения
@@ -54,6 +52,8 @@ fn main() -> Result<()> {
 
             let act = Act::new(sheet).unwrap();
 
+    let wb = Workbook::new("Test.xlsx");
+            let mut report = Report::new(wb);
             if let Err(x) = report.write(&act) {
                 println!("{x}");
             };
