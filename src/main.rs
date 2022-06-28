@@ -1,7 +1,8 @@
-use xlsxwriter::Workbook;
+use xlsxwriter::{Workbook, FormatColor, FormatUnderline};
 #[macro_use]
 extern crate error_chain;
 extern crate walkdir;
+use walkdir::{DirEntry, WalkDir};
 mod extract;
 mod load;
 mod transform;
@@ -10,7 +11,6 @@ use crate::extract::{Book, Sheet, SEARCH_REFERENCE_POINTS};
 use crate::load::Report;
 use crate::transform::Act;
 
-use walkdir::{DirEntry, WalkDir};
 
 error_chain! {
     foreign_links {
@@ -20,9 +20,9 @@ error_chain! {
 }
 
 fn main() -> Result<()> {
-    let (path, sh_name) = ui::session();
-    // let sh_name = "Лист1";
-    // let path = r"C:\Users\User\rust\acts_ks2_etl\";
+    // let (path, sh_name) = ui::session();
+    let sh_name = "Лист1";
+    let path = r"C:\Users\User\rust\acts_ks2_etl\";
     fn is_not_temp(entry: &DirEntry) -> bool {
         entry
             .file_name()

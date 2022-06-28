@@ -37,7 +37,9 @@ pub struct PrintPart {
     vector: Vec<OutputData>,
     total_col: u16,
 }
-
+struct FormatSet<'a> {
+    url: Format<'a>,
+}
 impl<'a> PrintPart {
     pub fn new(vector: Vec<OutputData>) -> Option<PrintPart> {
         let total_col = Self::count_col(&vector);
@@ -148,8 +150,8 @@ impl<'a> Report {
 
         #[rustfmt::skip]
         let main_list: Vec<OutputData> = vec![
-            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::Calculate("Ссылка на папку")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Ссылка на файл")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Папка (ссылка)")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Файл (ссылка)")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Исполнитель")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Глава")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Объект")},
@@ -178,7 +180,7 @@ impl<'a> Report {
         // Столбцы, которые будут совпадать со структурой шаблонного акта, получат приоритет и будут стремится в левое положение таблицы выстраиваясь в том же порядке что и в шаблоне.
         // Другими словами, структура нашего отчета воспроизведет в столбцах порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
         // В итогах присутсвует два вида данных: базовые и текущие цены, таким образом получается отчет будет написан из 3 частей.
-        
+
         let part_main = PrintPart::new(main_list).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
 
         Report {
@@ -226,6 +228,13 @@ impl<'a> Report {
                 continue;
             }
 
+        // let format_set = FormatSet {
+        //     url: self
+        //     .book.as_ref().unwrap()
+        //     .add_format()
+        //     .set_font_color(xlsxwriter::FormatColor::Blue)
+        //     .set_underline(xlsxwriter::FormatUnderline::Single),
+        // };
             if let Source::InTableHeader(name) = item.source {
                 Self::write_header(act, name, &mut sh, self.empty_row, column)?;
             }
@@ -334,8 +343,17 @@ impl<'a> Report {
                         .map(|number| write_number(sh, row, col, number * 1000., None)).unwrap();
                 }
             }
-            "Ссылка на папку" => {},
-            "Ссылка на файл" => {
+            "Папка (ссылка)" => {
+                if let Some(file_name) = act.path.split('\\').last() {
+                    let folder_path = act.path.replace(file_name, "");
+    //                 let mut format2 = w.add_format()
+    // .set_font_color(FormatColor::Blue)
+    // .set_underline(FormatUnderline::Single);
+                    // let formula = format!("=HYPERLINK(\"{}\", \"{}\")", act.path, file_name);
+                    sh.write_url(row, col, &folder_path, None);
+                };
+            },
+            "Файл (ссылка)" => {
                 if let Some(file_name) = act.path.split('\\').last() {
                     let formula = format!("=HYPERLINK(\"{}\", \"{}\")", act.path, file_name);
                     write_formula(sh, row, col, &formula, None)?;
@@ -367,23 +385,19 @@ impl<'a> Report {
             };
 
             match column_information {
-                Some((index, col_number_in_vec)) => {
-                    Some((
-                        part,
+                Some((index, col_number_in_vec)) => Some((
+                    part,
+                    corr + part_main.get_number_of_columns(),
+                    index,
+                    col_number_in_vec,
+                )),
+                _ => match part_main.get_column(kind, name, Matches::Exact) {
+                    Some((index, col_number_in_vec)) => Some((
+                        "main",
                         corr + part_main.get_number_of_columns(),
                         index,
                         col_number_in_vec,
-                    ))
-                }
-                _ => match part_main.get_column(kind, name, Matches::Exact) {
-                    Some((index, col_number_in_vec)) => {
-                        Some((
-                            "main",
-                            corr + part_main.get_number_of_columns(),
-                            index,
-                            col_number_in_vec,
-                        ))
-                    }
+                    )),
                     _ => None,
                 },
             }
@@ -399,7 +413,9 @@ impl<'a> Report {
                     };
                     let min_number_of_col =
                         (part.vector[index].expected_columns as usize).min(totalsrow_vec.len());
-                    for (number_of_col, number) in totalsrow_vec.iter().enumerate().take(min_number_of_col) {
+                    for (number_of_col, number) in
+                        totalsrow_vec.iter().enumerate().take(min_number_of_col)
+                    {
                         if let Some(number) = number {
                             write_number(
                                 sh,

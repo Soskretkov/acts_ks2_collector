@@ -10,7 +10,7 @@ pub fn session() -> (String, String) {
     loop {
         let path = inputting_path();
 
-        if path.matches(['\\']).count() > 0 {
+        if path.matches(['\\']).count() > 0 && !path.contains('.') {
             break (path, inputting_sheet_name());
         }
 
@@ -47,6 +47,8 @@ fn inputting_path() -> String {
             .chars()
             .filter(|ch| *ch != '"' && *ch != '@')
             .collect::<String>()
+            .strip_suffix('\\')
+            .unwrap()
             .to_lowercase();
 
         let len_text = text.chars().count();
