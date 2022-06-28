@@ -3,15 +3,15 @@ use calamine::DataType;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
-pub struct Act {
+pub struct Act<'a> {
     pub path: String,
-    pub sheetname: &'static str,
+    pub sheetname: &'a str,
     pub names_of_header: &'static [DesiredData; 15],
     pub data_of_header: Vec<Option<DataVariant>>,
     pub data_of_totals: Vec<TotalsRow>,
 }
 
-impl<'a> Act {
+impl<'a> Act<'a> {
     pub fn new(sheet: Sheet) -> Result<Act, String> {
         let header_addresses = Self::cells_addreses_in_header(&sheet.search_points);
         let data_of_header: Vec<Option<DataVariant>> = header_addresses

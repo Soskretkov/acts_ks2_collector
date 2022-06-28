@@ -1,4 +1,3 @@
-use std::error::Error;
 #[derive(Debug)]
 // pub enum ErrKind {
 //     Handled,
@@ -6,10 +5,10 @@ use std::error::Error;
 // }
 
 pub enum ErrName {
-    Shifted_columns_in_header,
-    Sheet_not_contain_all_necessary_data,
-    Calamine_sheet_of_the_book_is_undetectable,
-    Calamine_sheet_of_the_book_is_unreadable(calamine::XlsxError),
+    ShiftedColumnsInHeader,
+    SheetNotContainAllNecessaryData,
+    CalamineSheetOfTheBookIsUndetectable,
+    CalamineSheetOfTheBookIsUnreadable(calamine::XlsxError),
     Calamine,
 }
 

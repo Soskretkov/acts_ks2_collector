@@ -60,31 +60,31 @@ impl Book {
     }
 }
 
-pub struct Sheet {
+pub struct Sheet<'a> {
     pub path: String,
-    pub sheetname: &'static str,
+    pub sheetname: &'a str,
     pub data: Range<DataType>,
     pub search_points: HashMap<&'static str, (usize, usize)>,
     pub range_start: (usize, usize),
 }
 
-impl Sheet {
-    pub fn new<'a>(
+impl <'a>Sheet<'a> {
+    pub fn new(
         workbook: &'a mut Book,
-        sheetname: &'static str,
+        sheetname: &'a str,
         search_reference_points: &[(usize, Required, &'static str)],
         expected_sum_of_requir_col: usize,
-    ) -> Result<Sheet, ErrDescription> {
+    ) -> Result<Sheet<'a>, ErrDescription> {
         let data = workbook
             .data
             .worksheet_range(sheetname)
             .ok_or(ErrDescription {
-                name: ErrName::Calamine_sheet_of_the_book_is_undetectable,
+                name: ErrName::CalamineSheetOfTheBookIsUndetectable,
                 description: None,
             })?
             .or_else(|error| {
                 Err(ErrDescription {
-                    name: ErrName::Calamine_sheet_of_the_book_is_unreadable(error),
+                    name: ErrName::CalamineSheetOfTheBookIsUnreadable(error),
                     description: None,
                 })
             })?;
@@ -124,9 +124,9 @@ impl Sheet {
             .2;
 
         search_points.get(test).ok_or(ErrDescription {
-            name: ErrName::Sheet_not_contain_all_necessary_data,
+            name: ErrName::SheetNotContainAllNecessaryData,
             description: None,
-        });
+        })?;
 
         // Проверка значений на удаленность столбцов, чтобы гарантировать что найден нужный лист.
         let first_col = search_points
@@ -153,13 +153,13 @@ impl Sheet {
             == expected_sum_of_requir_col
         {
             return Err(ErrDescription {
-                name: ErrName::Shifted_columns_in_header,
+                name: ErrName::ShiftedColumnsInHeader,
                 description: None,
             });
         }
 
         let range_start_u32 = data.start().ok_or(ErrDescription {
-            name: ErrName::Calamine_sheet_of_the_book_is_undetectable,
+            name: ErrName::CalamineSheetOfTheBookIsUndetectable,
             description: None,
         })?;
 

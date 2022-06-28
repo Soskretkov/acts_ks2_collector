@@ -58,7 +58,6 @@ impl<'a> PrintPart {
         let mut counter = 0;
         let mut index = 0;
         for outputdata in self.vector.iter() {
-            // println!("{counter}: {:?}", outputdata.source);
             match outputdata {
                 OutputData {
                     source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
@@ -86,7 +85,6 @@ impl<'a> PrintPart {
                         counter += outputdata.expected_columns;
                     }
                 }
-                _ => (),
             };
         }
         None
@@ -180,15 +178,7 @@ impl<'a> Report {
         // Столбцы, которые будут совпадать со структурой шаблонного акта, получат приоритет и будут стремится в левое положение таблицы выстраиваясь в том же порядке что и в шаблоне.
         // Другими словами, структура нашего отчета воспроизведет в столбцах порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
         // В итогах присутсвует два вида данных: базовые и текущие цены, таким образом получается отчет будет написан из 3 частей.
-        // let vec_1: Vec<OutputData> = list
-        //     .into_iter()
-        //     .filter(|outputdata| {
-        //         outputdata.moving != Moving::Del
-        //             && !(outputdata.moving == Moving::No
-        //                 && (matches!(outputdata.source, Source::AtBasePrices(_, _))
-        //                     || matches!(outputdata.source, Source::AtCurrPrices(_, _))))
-        //     })
-        //     .collect();
+        
         let part_main = PrintPart::new(main_list).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
 
         Report {
@@ -232,9 +222,8 @@ impl<'a> Report {
         let mut column = 0_u16;
         // ниже итерация через "for" т.к. обработка ошибок со знаком "?" отклоняет калькулирующие замыкания итератеров таких как "fold"
         for item in self.part_main.vector.iter() {
-            match item.moving {
-                Moving::Del => continue,
-                _ => (),
+            if item.moving == Moving::Del {
+                continue;
             }
 
             if let Source::InTableHeader(name) = item.source {
@@ -255,7 +244,7 @@ impl<'a> Report {
                 self.part_curr.as_ref().unwrap(),
                 &mut sh,
                 self.empty_row,
-            );
+            )?;
         }
         self.empty_row += 1;
         Ok(())
@@ -328,7 +317,7 @@ impl<'a> Report {
                 if let Some(DataVariant::String(text)) = datavariant {
                     if text.matches(['/']).count() == 3 {
                        let text = &text.chars().take_while(|ch| *ch != '/').collect::<String>();
-                       write_string(sh, row, col, text, None);
+                       write_string(sh, row, col, text, None)?;
                     }
                 }
             }
@@ -372,18 +361,28 @@ impl<'a> Report {
                 "curr" => (
                     "curr",
                     part_curr.get_column(kind, name, Matches::Exact),
-                    part_base.total_col,
+                    part_base.get_number_of_columns(),
                 ),
                 _ => unreachable!("операция не над итоговыми строками акта"),
             };
 
             match column_information {
                 Some((index, col_number_in_vec)) => {
-                    return Some((part, corr + part_main.total_col, index, col_number_in_vec))
+                    Some((
+                        part,
+                        corr + part_main.get_number_of_columns(),
+                        index,
+                        col_number_in_vec,
+                    ))
                 }
                 _ => match part_main.get_column(kind, name, Matches::Exact) {
                     Some((index, col_number_in_vec)) => {
-                        return Some(("main", corr + part_main.total_col, index, col_number_in_vec))
+                        Some((
+                            "main",
+                            corr + part_main.get_number_of_columns(),
+                            index,
+                            col_number_in_vec,
+                        ))
                     }
                     _ => None,
                 },
@@ -400,14 +399,13 @@ impl<'a> Report {
                     };
                     let min_number_of_col =
                         (part.vector[index].expected_columns as usize).min(totalsrow_vec.len());
-                    for number_of_col in 0..min_number_of_col {
-                        let number = totalsrow_vec[number_of_col];
+                    for (number_of_col, number) in totalsrow_vec.iter().enumerate().take(min_number_of_col) {
                         if let Some(number) = number {
                             write_number(
                                 sh,
                                 row,
                                 col_number_in_vec + corr + number_of_col as u16,
-                                number,
+                                *number,
                                 None,
                             )?;
                         }
@@ -527,11 +525,11 @@ impl<'a> Report {
         let (part_base, part_curr) = sample.data_of_totals.iter().fold(
             (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
             |mut acc, smpl_totalsrow| {
-                if let Some(x) = get_outputdata(&exclude_from_base, &smpl_totalsrow, "base") {
+                if let Some(x) = get_outputdata(&exclude_from_base, smpl_totalsrow, "base") {
                     acc.0.push(x)
                 };
 
-                if let Some(y) = get_outputdata(&exclude_from_curr, &smpl_totalsrow, "curr") {
+                if let Some(y) = get_outputdata(&exclude_from_curr, smpl_totalsrow, "curr") {
                     acc.1.push(y)
                 };
                 acc
@@ -539,7 +537,7 @@ impl<'a> Report {
         );
         (part_base, part_curr)
     }
-    pub fn end(&mut self) -> Option<Workbook> {
+    pub fn end(&mut self) -> Result<Option<Workbook>, String> {
         let mut sh = self
             .book
             .as_ref()
@@ -560,7 +558,7 @@ impl<'a> Report {
             .chain(self.part_base.as_ref().unwrap().vector.iter())
             .chain(self.part_curr.as_ref().unwrap().vector.iter());
 
-        first_row.fold(0, |mut acc, outputdata| {
+        first_row.fold(0, |acc, outputdata| {
             let prefix = match outputdata.source {
                 Source::AtBasePrices(_, _) => Some("БЦ"),
                 Source::AtCurrPrices(_, _) => Some("TЦ"),
@@ -578,8 +576,8 @@ impl<'a> Report {
                 .to_owned(),
             };
 
-            let name = if prefix.is_some() {
-                prefix.unwrap().to_owned() + " " + &ending
+            let name = if let Some(x) = prefix {
+                x.to_owned() + " " + &ending
             } else {
                 ending
             };
@@ -590,7 +588,7 @@ impl<'a> Report {
             acc + outputdata.expected_columns
         });
 
-        self.book.take()
+        Ok(self.book.take())
     }
 }
 
