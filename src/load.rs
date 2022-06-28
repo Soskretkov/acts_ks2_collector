@@ -37,9 +37,6 @@ pub struct PrintPart {
     vector: Vec<OutputData>,
     total_col: u16,
 }
-struct FormatSet<'a> {
-    url: Format<'a>,
-}
 impl<'a> PrintPart {
     pub fn new(vector: Vec<OutputData>) -> Option<PrintPart> {
         let total_col = Self::count_col(&vector);
@@ -132,7 +129,7 @@ fn PrintPart_test() {
     );
 }
 pub struct Report {
-    pub book: Option<xlsxwriter::Workbook>,
+    pub book: xlsxwriter::Workbook,
     pub part_main: PrintPart,
     pub part_base: Option<PrintPart>,
     pub part_curr: Option<PrintPart>,
@@ -184,7 +181,7 @@ impl<'a> Report {
         let part_main = PrintPart::new(main_list).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
 
         Report {
-            book: Some(wb),
+            book: wb,
             part_main,
             part_base: None,
             part_curr: None,
@@ -202,14 +199,6 @@ impl<'a> Report {
             self.part_curr = part_curr;
         }
 
-        let format_set = FormatSet {
-            url: self
-            .book.as_ref().unwrap()
-            .add_format()
-            .set_font_color(xlsxwriter::FormatColor::Blue)
-            .set_underline(xlsxwriter::FormatUnderline::Single),
-        };
-
         Self::write_header(self, act);
         for totalsrow in act.data_of_totals.iter() {
             Self::write_totals(self, totalsrow)?;
@@ -218,19 +207,18 @@ impl<'a> Report {
         Ok(())
     }
     fn write_header(&mut self, act: &Act) -> Result<(), String> {
-        let mut wrapped_sheet = self
+        let fmt_url = self
             .book
-            .as_ref()
-            .unwrap() //_or(return Err ("Не удалось получить доступ к книге Excel, хранящейся в поле структуры \"Report\"".to_string()))
-            .get_worksheet("Result");
+            .add_format()
+            .set_font_color(xlsxwriter::FormatColor::Blue)
+            .set_underline(xlsxwriter::FormatUnderline::Single);
 
-        if wrapped_sheet.is_none() {
-            wrapped_sheet = self
-                .book
-                .as_mut()
-                .unwrap() //unwrap не требует обработки: обработка в переменной "wrapped_sheet"
-                .add_worksheet(Some("Result"))
-                .ok();
+        let fmt_date = self.book.add_format().set_num_format("dd/mm/yyyy");
+
+        let mut wrapped_sheet = self.book.get_worksheet("Result");
+
+        if let None = wrapped_sheet {
+            wrapped_sheet = self.book.add_worksheet(Some("Result")).ok();
         };
 
         let mut sh = wrapped_sheet.unwrap(); //_or(
@@ -249,11 +237,24 @@ impl<'a> Report {
                     .unwrap(); //.unwrap_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
                 let datavariant = &act.data_of_header[index];
 
+                let date_list = [
+                    "Договор дата",
+                    "Акт дата",
+                    "Отчетный период начало",
+                    "Отчетный период окончание",
+                ];
+
+                let format = if date_list.contains(&name) {
+                    Some(&fmt_date)
+                } else {
+                    None
+                };
+
                 if let Some(DataVariant::String(text)) = datavariant {
-                    write_string(&mut sh, row, column, text, None)?
+                    write_string(&mut sh, row, column, text, format)?;
                 }
                 if let Some(DataVariant::Float(number)) = datavariant {
-                    write_number(&mut sh, row, column, *number, None)?
+                    write_number(&mut sh, row, column, *number, format)?
                 }
             }
             if let Source::Calculate(name) = item.source {
@@ -320,7 +321,7 @@ impl<'a> Report {
             "Файл (ссылка)" => {
                 if let Some(file_name) = act.path.split('\\').last() {
                     let formula = format!("=HYPERLINK(\"{}\", \"{}\")", act.path, file_name);
-                    write_formula(&mut sh, row, column, &formula, None)?;
+                    write_formula(&mut sh, row, column, &formula, Some(&fmt_url))?;
                 };
             }
             _ => return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: невозможная попытка записать \"{}\" на лист Excel", name)),
@@ -332,20 +333,10 @@ impl<'a> Report {
     }
 
     fn write_totals(&mut self, totalsrow: &TotalsRow) -> Result<(), String> {
-
-        let mut wrapped_sheet = self
-            .book
-            .as_ref()
-            .unwrap() //_or(return Err ("Не удалось получить доступ к книге Excel, хранящейся в поле структуры \"Report\"".to_string()))
-            .get_worksheet("Result");
+        let mut wrapped_sheet = self.book.get_worksheet("Result");
 
         if wrapped_sheet.is_none() {
-            wrapped_sheet = self
-                .book
-                .as_mut()
-                .unwrap() //unwrap не требует обработки: обработка в переменной "wrapped_sheet"
-                .add_worksheet(Some("Result"))
-                .ok();
+            wrapped_sheet = self.book.add_worksheet(Some("Result")).ok();
         };
         let part_main = &self.part_main;
         let part_base = self.part_base.as_ref().unwrap();
@@ -533,13 +524,8 @@ impl<'a> Report {
         );
         (part_base, part_curr)
     }
-    pub fn end(&mut self) -> Result<Option<Workbook>, String> {
-        let mut sh = self
-            .book
-            .as_ref()
-            .unwrap() //_or(return Err ("Не удалось получить доступ к книге Excel, хранящейся в поле структуры \"Report\"".to_string()))
-            .get_worksheet("Result")
-            .unwrap();
+    pub fn end(self) -> Result<Workbook, String> {
+        let mut sh = self.book.get_worksheet("Result").unwrap();
 
         let first_row = self
             .part_main
@@ -584,7 +570,7 @@ impl<'a> Report {
             acc + outputdata.expected_columns
         });
 
-        Ok(self.book.take())
+        Ok(self.book)
     }
 }
 

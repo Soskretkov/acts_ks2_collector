@@ -1,4 +1,4 @@
-use xlsxwriter::{Workbook, FormatColor, FormatUnderline};
+use xlsxwriter::{Workbook};
 #[macro_use]
 extern crate error_chain;
 extern crate walkdir;
@@ -59,6 +59,6 @@ fn main() -> Result<()> {
         }
     }
     let wb_2 = report.end();
-    let _ = wb_2.unwrap().unwrap().close();
+    let _ = wb_2.unwrap().close();
     Ok(())
 }
