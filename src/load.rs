@@ -147,28 +147,28 @@ impl<'a> Report {
 
         #[rustfmt::skip]
         let main_list: Vec<OutputData> = vec![
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Папка (ссылка)")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Файл (ссылка)")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Исполнитель")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Глава")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Объект")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Договор №")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Договор дата")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Папка (ссылка)")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Файл (ссылка)")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Исполнитель")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Глава")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Объект")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Договор №")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Договор дата")},
             // OutputData{rename: None,                                            moving: Moving::Yes,   expected_columns: 1, source: Source::AtBasePrices("Стоимость материальных ресурсов (всего)", Matches::Exact)},
             // OutputData{rename: Some("Восстание машин"),                         moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин", Matches::Exact)},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Смета №")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Смета наименование")},
-            OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::No, expected_columns: 1, source: Source::Calculate("По смете в ц.2000г.")},
-            OutputData{rename: Some("Выполнение работ в ц.2000г., руб."),   moving: Moving::No, expected_columns: 1, source: Source::Calculate("Выполнение работ в ц.2000г.")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::Calculate("Акт №")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Акт дата")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период начало")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Отчетный период окончание")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1, source: Source::InTableHeader("Метод расчета")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Смета №")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Смета наименование")},
+            OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::No, expected_columns: 1,  source: Source::Calculate("По смете в ц.2000г.")},
+            OutputData{rename: Some("Выполнение работ в ц.2000г., руб."),   moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Выполнение работ в ц.2000г.")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Акт №")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Акт дата")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Отчетный период начало")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Отчетный период окончание")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Метод расчета")},
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Всего с НР и СП (тек".to_string(), Matches::Contains)},
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtCurrPrices("Всего с НР и СП (баз".to_string(), Matches::Contains)},
+            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1".to_string(), Matches::Exact)},
             // OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
-            // OutputData{rename: Some("УДАЛИТЬ..............."),                  moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1", Matches::Exact)},
             // OutputData{rename: None,                                            moving: Moving::Yes, expected_columns: 1, source: Source::AtBasePrices("ы", Matches::Contains)},
         ];
         // В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
@@ -335,13 +335,15 @@ impl<'a> Report {
     fn write_totals(&mut self, totalsrow: &TotalsRow) -> Result<(), String> {
         let mut wrapped_sheet = self.book.get_worksheet("Result");
 
-        if wrapped_sheet.is_none() {
+        if let None = wrapped_sheet {
             wrapped_sheet = self.book.add_worksheet(Some("Result")).ok();
         };
+
+        let mut sh = wrapped_sheet.unwrap(); //_or(
+
         let part_main = &self.part_main;
         let part_base = self.part_base.as_ref().unwrap();
         let part_curr = self.part_curr.as_ref().unwrap();
-        let mut sh = wrapped_sheet.unwrap(); //_or(
         let row = self.empty_row;
 
         let get_part = |kind: &str, name: &str| {
@@ -380,7 +382,7 @@ impl<'a> Report {
                     let (totalsrow_vec, part) = match part {
                         "base" => (&totalsrow.base_price, part_base),
                         "curr" => (&totalsrow.curr_price, part_curr),
-                        _ => unreachable!("операция не над итоговыми строками акта"),
+                        _ => {println!("{:?}", part); unreachable!("операция не над итоговыми строками акта")},
                     };
                     let min_number_of_col =
                         (part.vector[index].expected_columns as usize).min(totalsrow_vec.len());
@@ -569,6 +571,19 @@ impl<'a> Report {
             });
             acc + outputdata.expected_columns
         });
+        let last_col = self.part_main.get_number_of_columns() + self.part_base.unwrap().get_number_of_columns()
+        + self.part_curr.unwrap().get_number_of_columns();
+        sh.autofilter(
+            0,
+            0,
+            self.empty_row,
+            last_col,
+        );
+        let mut fmt_bold = self.book.add_format().set_bold();
+
+        sh.set_row(0, 15., Some(&fmt_bold));
+        // sh.set_column_opt(0, last_col, 45., None, None);
+        sh.freeze_panes(1, 0);
 
         Ok(self.book)
     }
