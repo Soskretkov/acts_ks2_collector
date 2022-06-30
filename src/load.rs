@@ -1,6 +1,7 @@
 use crate::transform::{Act, DataVariant, TotalsRow};
 use acts_ks2_etl::variant_eq;
-use xlsxwriter::{Format, Workbook, Worksheet};
+use regex::Regex;
+use xlsxwriter::{DateTime, Format, Workbook, Worksheet};
 
 #[derive(Debug)]
 pub struct OutputData {
@@ -243,18 +244,30 @@ impl<'a> Report {
                     "Отчетный период начало",
                     "Отчетный период окончание",
                 ];
+                let name_is_date = date_list.contains(&name);
+                let format = if name_is_date { Some(&fmt_date) } else { None };
 
-                let format = if date_list.contains(&name) {
-                    Some(&fmt_date)
-                } else {
-                    None
-                };
+                match datavariant {
+                    Some(DataVariant::String(text)) if name_is_date => {
+                        let re = Regex::new(r"^\d{2}.\d{2}.\d{4}$").unwrap();
+                        if re.is_match(text) {
+                            let mut date_iterator =
+                                text.split('.').flat_map(|s| s.parse::<i16>().ok()); //.map(|d| d);
+                            let day = date_iterator.next().unwrap() as i8;
+                            let month = date_iterator.next().unwrap() as i8;
+                            let year = date_iterator.next().unwrap();
+                            let datetime = DateTime::new(year, month, day, 0, 0, 0.0);
 
-                if let Some(DataVariant::String(text)) = datavariant {
-                    write_string(&mut sh, row, column, text, format)?;
-                }
-                if let Some(DataVariant::Float(number)) = datavariant {
-                    write_number(&mut sh, row, column, *number, format)?
+                            sh.write_datetime(row, column, &datetime, format);
+                        }
+                    }
+                    Some(DataVariant::String(text)) => {
+                        write_string(&mut sh, row, column, text, format)?
+                    }
+                    Some(DataVariant::Float(number)) => {
+                        write_number(&mut sh, row, column, *number, format)?
+                    }
+                    None => (),
                 }
             }
             if let Source::Calculate(name) = item.source {
@@ -348,9 +361,13 @@ impl<'a> Report {
 
         let get_part = |kind: &str, name: &str| {
             let (part, column_information, corr) = match kind {
-                "base" => ("base", part_base.get_column(kind, name, Matches::Exact), 0),
+                "base" => (
+                    "part_base",
+                    part_base.get_column(kind, name, Matches::Exact),
+                    0,
+                ),
                 "curr" => (
-                    "curr",
+                    "part_curr",
                     part_curr.get_column(kind, name, Matches::Exact),
                     part_base.get_number_of_columns(),
                 ),
@@ -366,7 +383,7 @@ impl<'a> Report {
                 )),
                 _ => match part_main.get_column(kind, name, Matches::Exact) {
                     Some((index, col_number_in_vec)) => Some((
-                        "main",
+                        "part_main",
                         corr + part_main.get_number_of_columns(),
                         index,
                         col_number_in_vec,
@@ -377,13 +394,18 @@ impl<'a> Report {
         };
 
         let mut write_if_some =
-            |column_info: Option<(&str, u16, usize, u16)>| -> Result<(), String> {
+            |kind: &str, column_info: Option<(&str, u16, usize, u16)>| -> Result<(), String> {
                 if let Some((part, corr, index, col_number_in_vec)) = column_info {
                     let (totalsrow_vec, part) = match part {
-                        "base" => (&totalsrow.base_price, part_base),
-                        "curr" => (&totalsrow.curr_price, part_curr),
-                        _ => {println!("{:?}", part); unreachable!("операция не над итоговыми строками акта")},
+                        "part_base" if kind == "base" => (&totalsrow.base_price, part_base),
+                        "part_curr" if kind == "curr" => (&totalsrow.curr_price, part_curr),
+                        "part_main" if kind == "base" => (&totalsrow.base_price, part_main),
+                        "part_main" if kind == "curr" => (&totalsrow.curr_price, part_main),
+                        _ => {
+                            unreachable!("операция не над итоговыми строками акта")
+                        }
                     };
+
                     let min_number_of_col =
                         (part.vector[index].expected_columns as usize).min(totalsrow_vec.len());
                     for (number_of_col, number) in
@@ -405,8 +427,8 @@ impl<'a> Report {
 
         let write_base = get_part("base", &totalsrow.name);
         let write_curr = get_part("curr", &totalsrow.name);
-        write_if_some(write_base)?;
-        write_if_some(write_curr)?;
+        write_if_some("base", write_base)?;
+        write_if_some("curr", write_curr)?;
         Ok(())
     }
 
@@ -571,14 +593,13 @@ impl<'a> Report {
             });
             acc + outputdata.expected_columns
         });
-        let last_col = self.part_main.get_number_of_columns() + self.part_base.unwrap().get_number_of_columns()
-        + self.part_curr.unwrap().get_number_of_columns();
-        sh.autofilter(
-            0,
-            0,
-            self.empty_row,
-            last_col,
-        );
+
+        let last_col = self.part_main.get_number_of_columns()
+            + self.part_base.unwrap().get_number_of_columns()
+            + self.part_curr.unwrap().get_number_of_columns()
+            - 1;
+
+        sh.autofilter(0, 0, self.empty_row, last_col);
         let mut fmt_bold = self.book.add_format().set_bold();
 
         sh.set_row(0, 15., Some(&fmt_bold));
