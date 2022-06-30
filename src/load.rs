@@ -1,7 +1,7 @@
 use crate::transform::{Act, DataVariant, TotalsRow};
 use acts_ks2_etl::variant_eq;
 use regex::Regex;
-use xlsxwriter::{DateTime, Format, Workbook, Worksheet};
+use xlsxwriter::{DateTime, Format, FormatAlignment, Workbook, Worksheet};
 
 #[derive(Debug)]
 pub struct OutputData {
@@ -150,6 +150,8 @@ impl<'a> Report {
         let main_list: Vec<OutputData> = vec![
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Папка (ссылка)")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Файл (ссылка)")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Акт №")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Акт дата")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Исполнитель")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Глава")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Объект")},
@@ -161,8 +163,6 @@ impl<'a> Report {
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Смета наименование")},
             OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::No, expected_columns: 1,  source: Source::Calculate("По смете в ц.2000г.")},
             OutputData{rename: Some("Выполнение работ в ц.2000г., руб."),   moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Выполнение работ в ц.2000г.")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Акт №")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Акт дата")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Отчетный период начало")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Отчетный период окончание")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Метод расчета")},
@@ -589,7 +589,20 @@ impl<'a> Report {
             };
 
             (0..outputdata.expected_columns).for_each(|exp_col| {
-                write_string(&mut sh, 0, acc + exp_col, &name, None);
+                //Ниже, включая for это вычисляется нужная ширина столбца при переносе строк в ячейке
+                let name_len = name.chars().count() / 2;
+                let mut first_line_len = 0;
+                for word in name.split(' ') {
+                    first_line_len += word.chars().count() + 1;
+                    if first_line_len > name_len {
+                        break;
+                    }
+                }
+                let width = 11.max(first_line_len) as f64;
+
+                let col = acc + exp_col;
+                write_string(&mut sh, 0, col, &name, None);
+                sh.set_column(col, col, width, None);
             });
             acc + outputdata.expected_columns
         });
@@ -599,13 +612,22 @@ impl<'a> Report {
             + self.part_curr.unwrap().get_number_of_columns()
             - 1;
 
-        sh.autofilter(0, 0, self.empty_row, last_col);
-        let mut fmt_bold = self.book.add_format().set_bold();
+        sh.autofilter(0, 0, self.empty_row - 1, last_col);
 
-        sh.set_row(0, 15., Some(&fmt_bold));
-        // sh.set_column_opt(0, last_col, 45., None, None);
-        sh.freeze_panes(1, 0);
+        // Это формат для заголовка таблицы
+        let fmt_bold = self
+            .book
+            .add_format()
+            .set_bold()
+            .set_text_wrap() // перенос строк внутри ячейки
+            .set_align(FormatAlignment::VerticalTop)
+            .set_align(FormatAlignment::Center);
 
+        sh.set_row(0, 29., Some(&fmt_bold));
+
+        sh.freeze_panes(1, 2);
+
+        // sh.set_default_row(29.0, false);
         Ok(self.book)
     }
 }
