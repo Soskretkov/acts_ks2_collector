@@ -200,7 +200,7 @@ impl<'a> Report {
             self.part_curr = part_curr;
         }
 
-        Self::write_header(self, act);
+        Self::write_header(self, act)?;
         for totalsrow in act.data_of_totals.iter() {
             Self::write_totals(self, totalsrow)?;
         }

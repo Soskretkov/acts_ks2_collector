@@ -1,4 +1,6 @@
 /target
 /search
 Cargo.lock
-Test.xlsx
+acts_ks2_etl.xlsx
+icon.ico
+f.xlsm
