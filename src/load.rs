@@ -218,7 +218,7 @@ impl<'a> Report {
 
         let mut wrapped_sheet = self.book.get_worksheet("Result");
 
-        if let None = wrapped_sheet {
+        if wrapped_sheet.is_none() {
             wrapped_sheet = self.book.add_worksheet(Some("Result")).ok();
         };
 
@@ -296,9 +296,9 @@ impl<'a> Report {
                 let index = act.names_of_header.iter().position(|desired_data| desired_data.name == name).unwrap();//_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
                 let datavariant = &act.data_of_header[index];
 
-                if let Some(DataVariant::String(text)) = datavariant {
-                    text.strip_prefix("Смета № ")
-                        .map(|text| write_string(&mut sh, row, column, text, None));
+                if let Some(DataVariant::String(txt)) = datavariant {
+                    let text = txt.trim_left_matches("Смета № ");
+                        write_string(&mut sh, row, column, text, None);
                 }
             }
             "Акт №" => {
@@ -348,7 +348,7 @@ impl<'a> Report {
     fn write_totals(&mut self, totalsrow: &TotalsRow) -> Result<(), String> {
         let mut wrapped_sheet = self.book.get_worksheet("Result");
 
-        if let None = wrapped_sheet {
+        if wrapped_sheet.is_none() {
             wrapped_sheet = self.book.add_worksheet(Some("Result")).ok();
         };
 
@@ -549,7 +549,10 @@ impl<'a> Report {
         (part_base, part_curr)
     }
     pub fn end(self) -> Result<Workbook, String> {
-        let mut sh = self.book.get_worksheet("Result").unwrap();
+        let mut sh = self
+            .book
+            .get_worksheet("Result")
+            .ok_or("Не удается записать результат в файл Excel")?;
 
         let first_row = self
             .part_main
@@ -564,7 +567,8 @@ impl<'a> Report {
             .chain(self.part_base.as_ref().unwrap().vector.iter())
             .chain(self.part_curr.as_ref().unwrap().vector.iter());
 
-        first_row.fold(0, |acc, outputdata| {
+        let mut acc = 0;
+        for outputdata in first_row {
             let prefix = match outputdata.source {
                 Source::AtBasePrices(_, _) => Some("БЦ"),
                 Source::AtCurrPrices(_, _) => Some("TЦ"),
@@ -588,7 +592,7 @@ impl<'a> Report {
                 ending
             };
 
-            (0..outputdata.expected_columns).for_each(|exp_col| {
+            for exp_col in 0..outputdata.expected_columns {
                 //Ниже, включая for это вычисляется нужная ширина столбца при переносе строк в ячейке
                 let name_len = name.chars().count() / 2;
                 let mut first_line_len = 0;
@@ -601,11 +605,11 @@ impl<'a> Report {
                 let width = 11.max(first_line_len) as f64;
 
                 let col = acc + exp_col;
-                write_string(&mut sh, 0, col, &name, None);
+                write_string(&mut sh, 0, col, &name, None)?;
                 sh.set_column(col, col, width, None);
-            });
-            acc + outputdata.expected_columns
-        });
+            }
+            acc += outputdata.expected_columns;
+        }
 
         let last_col = self.part_main.get_number_of_columns()
             + self.part_base.unwrap().get_number_of_columns()

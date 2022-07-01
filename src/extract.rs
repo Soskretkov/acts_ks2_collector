@@ -60,24 +60,35 @@ impl Book {
     }
 }
 
-pub struct Sheet<'a> {
+pub struct Sheet {
     pub path: String,
-    pub sheetname: &'a str,
+    pub sheet_name: String,
     pub data: Range<DataType>,
     pub search_points: HashMap<&'static str, (usize, usize)>,
     pub range_start: (usize, usize),
 }
 
-impl <'a>Sheet<'a> {
+impl<'a> Sheet {
     pub fn new(
         workbook: &'a mut Book,
-        sheetname: &'a str,
+        user_entered_sh_name: &'a str,
         search_reference_points: &[(usize, Required, &'static str)],
         expected_sum_of_requir_col: usize,
-    ) -> Result<Sheet<'a>, ErrDescription> {
+    ) -> Result<Sheet, ErrDescription> {
+        let sh_names = workbook.data.sheet_names();
+
+        let sheet_name = sh_names
+            .iter()
+            .find(|name| name.to_lowercase() == user_entered_sh_name)
+            .ok_or(ErrDescription {
+                name: ErrName::CalamineSheetOfTheBookIsUndetectable,
+                description: Some(format!("{:?}", sh_names)),
+            })?
+            .to_owned();
+
         let data = workbook
             .data
-            .worksheet_range(sheetname)
+            .worksheet_range(&sheet_name)
             .ok_or(ErrDescription {
                 name: ErrName::CalamineSheetOfTheBookIsUndetectable,
                 description: None,
@@ -167,7 +178,7 @@ impl <'a>Sheet<'a> {
 
         Ok(Sheet {
             path: workbook.path.clone(),
-            sheetname,
+            sheet_name,
             data,
             search_points,
             range_start,

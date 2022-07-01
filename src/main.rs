@@ -1,3 +1,4 @@
+use console::Term;
 use std::env;
 use xlsxwriter::Workbook;
 #[macro_use]
@@ -21,7 +22,7 @@ error_chain! {
 
 fn main() -> Result<()> {
     let (path, sh_name) = ui::session();
-    // let sh_name = "Лист1";
+    // let sh_name = "Лист1".to_owned();
     // let path = r"C:\Users\User\rust\acts_ks2_etl\";
     fn is_not_temp(entry: &DirEntry) -> bool {
         entry
@@ -33,9 +34,9 @@ fn main() -> Result<()> {
     let report_name_prefix = env::args()
         .next()
         .unwrap()
-        .strip_suffix(".exe")
-        .unwrap()
+        .trim_end_matches(".exe")
         .to_owned();
+
     let report_name = report_name_prefix + ".xlsx";
     let wb = Workbook::new(&report_name);
     let mut report = Report::new(wb);
@@ -58,35 +59,41 @@ fn main() -> Result<()> {
             )
             .unwrap_or_else(|err| {
                 if let Some(text) = acts_ks2_etl::error_message(err, &sh_name) {
-                    println!("Возникла ошибка. \n{}", text);
-                    println!("\nФайл, вызывающий ошибку: {}", f_path.to_string());
+                    let _ = Term::stdout().clear_screen();
+                    println!("\nВозникла ошибка. \n{}", text);
+                    println!("\nФайл, вызывающий ошибку: {}", f_path);
                     loop {}
                 };
                 panic!()
             });
 
             let act = Act::new(sheet).unwrap_or_else(|err| {
-                println!("Возникла ошибка. \n{}", err);
-                println!("\nФайл, вызывающий ошибку: {}", f_path.to_string());
+                let _ = Term::stdout().clear_screen();
+                println!("\nВозникла ошибка. \n{}", err);
+                println!("\nФайл, вызывающий ошибку: {}", f_path);
                 loop {}
             });
 
             if let Err(err) = report.write(&act) {
-                println!("Возникла ошибка. \n{}", err);
-                println!("\nФайл, вызывающий ошибку: {}", f_path.to_string());
+                let _ = Term::stdout().clear_screen();
+                println!("\nВозникла ошибка. \n{}", err);
+                println!("\nФайл, вызывающий ошибку: {}", f_path);
                 loop {}
             };
         }
+        println!("Успешно собрана информация из {} актов", report.empty_row - 1);
     }
     let number_of_files = report.empty_row - 1;
     let file = report.end();
     file.unwrap().close().unwrap_or_else(|_| {
+        let _ = Term::stdout().clear_screen();
         println!(
             "Возникла ошибка, вероятная причина:\
         \nне закрыт файл Excel с результатами прошлого сбора."
         );
     });
 
+    let _ = Term::stdout().clear_screen();
     println!(
         "Успешно выполнено.\nСобрано {} файлов.\nСоздан файл \"{}\"",
         number_of_files, report_name

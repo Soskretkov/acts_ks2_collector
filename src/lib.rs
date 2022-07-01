@@ -19,15 +19,15 @@ pub struct ErrDescription {
 }
 
 pub fn error_message(err: ErrDescription, sh_name: &str) -> Option<String> {
-    match err.name {
-        ErrName::CalamineSheetOfTheBookIsUnreadable(_) => Some(format!("Какая-то проблема с чтением листа {}", sh_name)),
-        ErrName::ShiftedColumnsInHeader => Some(String::from("Обнаружен нестандартный заголовок в Акте КС-2.\
+    match err {
+        ErrDescription{name: ErrName::CalamineSheetOfTheBookIsUnreadable(_), ..} => Some(format!("Какая-то проблема с чтением листа {}", sh_name)),
+        ErrDescription{name: ErrName::ShiftedColumnsInHeader, ..} => Some(String::from("Обнаружен нестандартный заголовок в Акте КС-2.\
         \nОжидаемая диспозиция столбцов для успешного сбора такова:
         \"Стройка\" и \"Объект\"                      - находятся в 1 столбце,
         \"Наименование работ и затрат\"             - находится в 4 столбце,
         \"Номер документа\"                         - находится в 6 столбце,
         \"Договор подряда\" и \"Доп. соглашение\"     - находятся в 10 столбце.")),
-        ErrName::SheetNotContainAllNecessaryData => Some(String::from("В акте не полные данные.\
+        ErrDescription{name: ErrName::SheetNotContainAllNecessaryData, ..} => Some(String::from("В акте не полные данные.\
         \nОт файла требуется набор следующих ключевых слов:\
         \n  \"Стройка\",\
         \n  \"Объект\",\
@@ -42,11 +42,14 @@ pub fn error_message(err: ErrDescription, sh_name: &str) -> Option<String> {
         \nВхождение слов по строкам должно быть в порядке перечисления здесь: т.е. в файле\
         \nстрока \"Стройка\" должна быть выше строки \"Объект\", а \"Объект\", в свою очередь,\
         \nрасположен выше строки с текстом \"Договор подряда\".")),
-        ErrName::CalamineSheetOfTheBookIsUndetectable => Some(format!("Встретился файл, который не содержит запрашиваемого вами листа \"{x}\".\n\
-        Чтобы успешно выполнить процедуру сбора файлов, выполните одно из перечисленных действий над файлом, вызывающим ошибку:\n\
-        - откройте файл и присвойте листу с актом имя \"{x}\";\n\
-        - если вы не хотите собирать этот файл, переименуйте его, добавив к старому имени символ \"@\", или удалите файл из папки.", x = sh_name)),
-        ErrName::Calamine => None,
+        ErrDescription{name: ErrName::CalamineSheetOfTheBookIsUndetectable, description: descr} => 
+        Some(format!("Встретился файл, который не содержит запрашиваемого вами листа \"{x}\",\
+        \nтак как файл имеет только следующие листы:\
+        \n\n{y}\
+        \n\nЧтобы успешно выполнить процедуру сбора файлов, выполните одно из перечисленных действий над файлом, вызывающим ошибку:\
+        \n- откройте файл и присвойте листу с актом имя, которое затем укажете программе (таким же образом, как сейчас указали имя \"{x}\");\
+        \n- если не хотите собирать этот файл, переименуйте его, добавив к существующему имени символ \"@\", или удалите файл из папки.", x = sh_name, y = descr.unwrap())),
+        ErrDescription{name: ErrName::Calamine, ..} => None,
     }
 }
 pub fn variant_eq<T>(first: &T, second: &T) -> bool {

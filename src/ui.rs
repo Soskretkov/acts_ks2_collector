@@ -10,7 +10,7 @@ pub fn session() -> (String, String) {
     loop {
         let path = inputting_path();
 
-        if path.matches(['\\']).count() > 0 && !path.contains('.') {
+        if path.matches(['\\']).count() > 0 {
             break (path, inputting_sheet_name());
         }
 
@@ -47,8 +47,7 @@ fn inputting_path() -> String {
             .chars()
             .filter(|ch| *ch != '"' && *ch != '@')
             .collect::<String>()
-            .strip_suffix('\\')
-            .unwrap()
+            // .trim_end_matches('\\')
             .to_lowercase();
 
         let len_text = text.chars().count();
@@ -64,21 +63,21 @@ fn inputting_path() -> String {
 fn inputting_sheet_name() -> String {
     loop {
         let _ = Term::stdout().clear_screen();
-        println!("Нет разницы, вводите ли вы «Лист1» или «лист1» - способ указания листа не чувствителен к регистру.");
-        thread::sleep(Duration::from_secs(1));
         println!("Введите имя листа:");
+        thread::sleep(Duration::from_secs(1));
+        println!("Нет разницы, вводите ли вы «Лист1» или «лист1» - способ указания листа не чувствителен к регистру.");
         let mut temp_sh_name = String::new();
 
         io::stdin()
             .read_line(&mut temp_sh_name)
             .expect("Ошибка чтения ввода");
 
-        temp_sh_name = temp_sh_name.trim().to_owned();
+        temp_sh_name = temp_sh_name.trim().to_string();
 
         let len_text = temp_sh_name.chars().count();
 
         if len_text > 0 {
-            return temp_sh_name;
+            return temp_sh_name.to_lowercase();
         }
     }
 }
@@ -105,9 +104,9 @@ fn show_details() {
     //println!("------------------------------------------------------------------------------------------------------------\n");
     println!("            Наименование продукта:        «Сборщик данных из актов формы \"КС-2\"»");
     println!("            Адрес проекта на GitHub.com:  https://github.com/Soskretkov/ks2_etl");
-    println!("            Дата создания:                27.06.2022");
-    println!("            Дата последних изменений:     28.06.2022");
-    println!("            Автор:                        Оскретков Сергей Юрьевич\n\n");
+    println!("            Дата создания:                01.07.2022");
+    println!("            Дата последних изменений:     01.07.2022");
+    println!("            Автор:                        Оскретков Сергей Юрьевич\n");
     println!("            Специально для: ООО «Трест Росспецэнергомонтаж»,");
     println!("            Альтуфьевское шоссе, д. 43, стр. 1, Москва, 127410,");
     println!("            Cметно-договорное управление.");
