@@ -1,4 +1,4 @@
-use acts_ks2_etl::{ErrDescription, ErrName};
+use ks2_etl::{ErrDescription, ErrName};
 use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
 use std::collections::HashMap;
 use std::fs::File;

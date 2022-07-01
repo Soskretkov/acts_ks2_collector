@@ -58,7 +58,7 @@ fn main() -> Result<()> {
                 29, //передается для расчета смещения столбцов. Это сумма номеров столбцов Y-типа в DESIRED_DATA_ARRAY: 0 + 0 + 3 + 5 + 9 + 9 + 3.
             )
             .unwrap_or_else(|err| {
-                if let Some(text) = acts_ks2_etl::error_message(err, &sh_name) {
+                if let Some(text) = ks2_etl::error_message(err, &sh_name) {
                     let _ = Term::stdout().clear_screen();
                     println!("\nВозникла ошибка. \n{}", text);
                     println!("\nФайл, вызывающий ошибку: {}", f_path);

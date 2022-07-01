@@ -1,5 +1,5 @@
 use crate::transform::{Act, DataVariant, TotalsRow};
-use acts_ks2_etl::variant_eq;
+use ks2_etl::variant_eq;
 use regex::Regex;
 use xlsxwriter::{DateTime, Format, FormatAlignment, Workbook, Worksheet};
 
@@ -62,7 +62,7 @@ impl<'a> PrintPart {
                 OutputData {
                     source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
                     ..
-                } if acts_ks2_etl::variant_eq(&outputdata.source, &src)
+                } if ks2_etl::variant_eq(&outputdata.source, &src)
                     && variant_eq(m, &matches)
                     && m == &Matches::Exact
                     && name == text =>
@@ -72,7 +72,7 @@ impl<'a> PrintPart {
                 OutputData {
                     source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
                     ..
-                } if acts_ks2_etl::variant_eq(&outputdata.source, &src)
+                } if ks2_etl::variant_eq(&outputdata.source, &src)
                     && variant_eq(m, &matches)
                     && m == &Matches::Contains
                     && name.contains(text) =>
