@@ -6,7 +6,7 @@ use xlsxwriter::Workbook;
 extern crate error_chain;
 // extern crate walkdir;
 
-use walkdir::{DirEntry, WalkDir};
+// use walkdir::{DirEntry, WalkDir};
 mod extract;
 mod load;
 mod transform;
@@ -23,9 +23,9 @@ error_chain! {
 }
 
 fn main() -> Result<()> {
-    // let (path, sh_name) = ui::session();
-    let sh_name = "лист1".to_owned();
-    let path = r"C:\Users\User\rust\acts_ks2_etl\";
+    let (path, sh_name) = ui::session();
+    // let sh_name = "лист1".to_owned();
+    // let path = r"C:\Users\User\rust\acts_ks2_etl\";
     let report_name_prefix = env::args()
         .next()
         .unwrap()

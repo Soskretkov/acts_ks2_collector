@@ -1,7 +1,8 @@
-use console::Term;
+use std::path::Path;
 use std::io;
 use std::thread;
 use std::time::Duration;
+use console::Term;
 
 pub fn session() -> (String, String) {
     show_first_lines();
@@ -10,7 +11,7 @@ pub fn session() -> (String, String) {
     loop {
         let path = inputting_path();
 
-        if path.matches(['\\']).count() > 0 {
+        if Path::new(&path).exists() {
             break (path, inputting_sheet_name());
         }
 
@@ -34,7 +35,6 @@ pub fn session() -> (String, String) {
 }
 
 fn inputting_path() -> String {
-    loop {
         println!("Введите путь:");
         let mut text = String::new();
         io::stdin()
@@ -42,22 +42,12 @@ fn inputting_path() -> String {
             .expect("Ошибка чтения ввода");
 
         //filter нужен на случай ввода "details"  в кавычках (@ - на случай русской раскладки)
-        text = text
+        text
             .trim()
             .chars()
             .filter(|ch| *ch != '"' && *ch != '@')
             .collect::<String>()
-            // .trim_end_matches('\\')
-            .to_lowercase();
-
-        let len_text = text.chars().count();
-
-        if len_text < 3 {
-            continue;
-        }
-
-        break text;
-    }
+            .to_lowercase()
 }
 
 fn inputting_sheet_name() -> String {
