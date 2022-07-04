@@ -297,7 +297,7 @@ impl<'a> Report {
                 let datavariant = &act.data_of_header[index];
 
                 if let Some(DataVariant::String(txt)) = datavariant {
-                    let text = txt.trim_left_matches("Смета № ");
+                    let text = txt.trim_start_matches("Смета № ");
                         write_string(&mut sh, row, column, text, None);
                 }
             }

@@ -1,8 +1,9 @@
-use ks2_etl::{ErrDescription, ErrName};
-use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
+use std::path::PathBuf;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
+use ks2_etl::{ErrDescription, ErrName};
+use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
 
 #[derive(PartialEq)]
 pub enum Required {
@@ -46,22 +47,22 @@ pub const DESIRED_DATA_ARRAY: [DesiredData; 15] = [
     DesiredData{name:"Метод расчета",                offset: Some(("наименование работ и затрат",    (-1, -3)))},
 ];
 pub struct Book {
-    pub path: String,
+    pub path: PathBuf,
     pub data: Xlsx<BufReader<File>>,
 }
 
 impl Book {
-    pub fn new(path: &str) -> Result<Self, XlsxError> {
+    pub fn new(path: PathBuf) -> Result<Self, XlsxError> {
         let data: Xlsx<_> = calamine::open_workbook(&path)?;
         Ok(Book {
-            path: path.to_owned(),
+            path,
             data,
         })
     }
 }
 
 pub struct Sheet {
-    pub path: String,
+    pub path: PathBuf,
     pub sheet_name: String,
     pub data: Range<DataType>,
     pub search_points: HashMap<&'static str, (usize, usize)>,

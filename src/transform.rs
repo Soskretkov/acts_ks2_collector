@@ -30,7 +30,7 @@ impl Act {
         let data_of_totals = Self::raw_totals(&sheet).unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
 
         Ok(Act {
-            path: sheet.path,
+            path: sheet.path.to_string_lossy().to_string(),
             sheetname: sheet.sheet_name,
             names_of_header: &DESIRED_DATA_ARRAY,
             data_of_header,
