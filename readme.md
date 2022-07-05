@@ -9,4 +9,6 @@ Collects data from the form header and form totals and loads the collected data 
 
 ● It makes no difference whether you enter "Sheet1" or "sheet1" - the way you specify the sheet name is not case-sensitive.
 
-● Useful tip: rename an Excel file by adding the «@» symbol, and the program will not collect its data.
+● Helpful hints:
+    - Rename an Excel file by adding the "@" symbol, and the program will not collect its data;
+    - Rename a folder by adding the "@" symbol, and the program will ignore its contents.

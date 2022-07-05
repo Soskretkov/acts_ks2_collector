@@ -1,12 +1,10 @@
 use std::path::Path;
 use std::io;
-use std::thread;
-use std::time::Duration;
-use console::Term;
+use std::thread; // для засыпания на секунду-две
+use std::time::Duration; // для засыпания на секунду-две
+use console::Term; // для очистки консоли перед выводом полезных сообщений
 
 pub fn session() -> (String, String) {
-    show_first_lines();
-    show_help();
 
     loop {
         let path = inputting_path();
@@ -67,16 +65,16 @@ fn inputting_sheet_name() -> String {
         let len_text = temp_sh_name.chars().count();
 
         if len_text > 0 {
-            return temp_sh_name.to_lowercase();
+            return temp_sh_name;
         }
     }
 }
 
-fn show_first_lines() {
+pub fn show_first_lines() {
     println!("        Введите  \"details\"  для получения подробностей о программе.\n");
 }
 #[rustfmt::skip]
-fn show_help() {
+pub fn show_help() {
     println!("------------------------------------------------------------------------------------------------------------\n");
     println!("● Используйте CTRL + C, чтобы вставить скопированный путь к папке, из которой необходимо собрать данные.");
     println!("● Программа будет собирать данные из файлов в указанной папке и всех вложенных папках.");
