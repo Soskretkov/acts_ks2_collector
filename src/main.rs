@@ -1,9 +1,8 @@
 use console::Term;
 use std::env;
 use std::path::Path;
+use walkdir::{DirEntry, WalkDir};
 use xlsxwriter::Workbook;
-#[macro_use]
-// extern crate error_chain;
 mod extract;
 mod load;
 mod transform;
@@ -15,7 +14,7 @@ use crate::transform::Act;
 fn main() {
     // let (path_str, sh_name) = ui::session();
     let sh_name = "лист1".to_owned();
-    let path_str = r"C:\Users\User\rust\ks2_etl\";
+    let path_str = r"C:\Users\User\rust\ks2_etl";
     let report_name_prefix = env::args()
         .next()
         .unwrap()
@@ -28,20 +27,34 @@ fn main() {
 
     let path = Path::new(&path_str);
 
-    for entry in path
-        .read_dir()
-        .expect("возникла ошибка в цикле перебора файлов в указанной пользователем папке")
+    let is_excluded_file = |entry: &DirEntry| -> bool {
+        entry
+            .path()
+            .strip_prefix(&path_str)
+            .unwrap()
+            .to_string_lossy()
+            .contains('@')
+    };
+
+    let mut excluded_files_counter = 0_u32;
+    for entry in WalkDir::new(path)
+        .into_iter()
+        .filter_map(|e| e.ok()) //будет молча пропускать каталоги, на доступ к которым у владельца запущенного процесса нет разрешения
+        .filter(|e| {
+            e.file_name()
+                .to_str()
+                .map(|s| !s.starts_with('~') & s.ends_with(".xlsm"))
+                .unwrap_or(false)
+        })
     {
-        let file_path = entry.unwrap().path();
-        let stem = match file_path.extension() {
-            Some(x) => x.to_string_lossy().to_string(),
-            None => continue,
-        };
-        if !stem.contains("xlsm") {
+        if is_excluded_file(&entry) {
+            excluded_files_counter += 1;
             continue;
         }
-        println!("{stem}");
-        let mut file = Book::new(file_path.clone()).unwrap();
+
+        let file_path = entry.path();
+
+        let mut file = Book::new(file_path.to_path_buf()).unwrap();
 
         let sheet = Sheet::new(
             &mut file,
@@ -72,12 +85,13 @@ fn main() {
             println!("\nФайл, вызывающий ошибку: {}", file_path.display());
             loop {}
         };
+        let _ = Term::stdout().clear_screen();
         println!(
             "Успешно собрана информация из {} актов",
             report.empty_row - 1
         );
-        }
-    number_of_files = report.empty_row - 1;
+    }
+    let files_counter = report.empty_row - 1;
     let file = report.end();
     file.unwrap().close().unwrap_or_else(|_| {
         let _ = Term::stdout().clear_screen();
@@ -88,10 +102,10 @@ fn main() {
     });
 
     let _ = Term::stdout().clear_screen();
-    println!(
-        "Успешно выполнено.\nСобрано {} файлов.\nСоздан файл \"{}\"",
-        number_of_files, report_name
-    );
+    println!("Успешно выполнено.\nСобрано {} файла(ов).", files_counter);
+    if excluded_files_counter > 0 {
+        println!("{} файла(ов), помеченно «@», для исключения.", excluded_files_counter);
+    }
+    println!("\nСоздан файл \"{}\"", report_name);
     loop {}
-    // Ok(())
 }
