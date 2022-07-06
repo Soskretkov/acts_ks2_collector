@@ -1,6 +1,9 @@
+use crate::extract::Book;
 use crate::transform::{Act, DataVariant, TotalsRow};
 use ks2_etl::variant_eq;
 use regex::Regex;
+use std::path::PathBuf;
+use walkdir::{DirEntry, WalkDir};
 use xlsxwriter::{DateTime, Format, FormatAlignment, Workbook, Worksheet};
 
 #[derive(Debug)]
@@ -38,7 +41,7 @@ pub struct PrintPart {
     vector: Vec<OutputData>,
     total_col: u16,
 }
-impl<'a> PrintPart {
+impl PrintPart {
     pub fn new(vector: Vec<OutputData>) -> Option<PrintPart> {
         let total_col = Self::count_col(&vector);
 
@@ -684,4 +687,38 @@ fn write_formula(
     //     )),
     // );
     Ok(())
+}
+
+pub fn directory_traversal(path: PathBuf) -> (Vec<Book>, u32) {
+    let prefix = path.to_string_lossy().to_string();
+    let is_excluded_file = |entry: &DirEntry| -> bool {
+        entry
+            .path()
+            .strip_prefix(&prefix)
+            .unwrap()
+            .to_string_lossy()
+            .contains('@')
+    };
+
+    let mut result_vector: Vec<Book> = vec![];
+    let mut excluded_files_counter = 0_u32;
+
+    for entry in WalkDir::new(path)
+        .into_iter()
+        .filter_map(|e| e.ok()) //будет молча пропускать каталоги, на доступ к которым у владельца запущенного процесса нет разрешения
+        .filter(|e| {
+            e.file_name()
+                .to_str()
+                .map(|s| !s.starts_with('~') & s.ends_with(".xlsm"))
+                .unwrap_or(false)
+        })
+    {
+        if is_excluded_file(&entry) {
+            excluded_files_counter += 1;
+            continue;
+        }
+        let temp_book = Book::new(entry.into_path()).unwrap();
+        result_vector.push(temp_book);
+    }
+    (result_vector, excluded_files_counter)
 }

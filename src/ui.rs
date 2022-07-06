@@ -1,21 +1,21 @@
-use std::path::Path;
+use console::Term;
 use std::io;
+use std::path::PathBuf;
 use std::thread; // для засыпания на секунду-две
-use std::time::Duration; // для засыпания на секунду-две
-use console::Term; // для очистки консоли перед выводом полезных сообщений
+use std::time::Duration; // для засыпания на секунду-две // для очистки консоли перед выводом полезных сообщений
 
-pub fn session() -> (String, String) {
-
+pub fn session() -> (PathBuf, String) {
     loop {
-        let path = inputting_path();
+        let entered_path = inputting_path();
+        let path = PathBuf::from(&entered_path);
 
-        if Path::new(&path).exists() {
-            break (path, inputting_sheet_name());
+        if path.exists() {
+            break (path, entered_sheet_name());
         }
 
-        let len_path = path.chars().count();
+        let len_path = entered_path.chars().count();
 
-        match path {
+        match entered_path {
             x if len_path < 9
                 && x.matches([
                     'd', 'e', 't', 'a', 'i', 'l', 's', 'в', 'у', 'е', 'ф', 'ш', 'д', 'ы',
@@ -33,22 +33,21 @@ pub fn session() -> (String, String) {
 }
 
 fn inputting_path() -> String {
-        println!("Введите путь:");
-        let mut text = String::new();
-        io::stdin()
-            .read_line(&mut text)
-            .expect("Ошибка чтения ввода");
+    println!("Введите путь:");
+    let mut text = String::new();
+    io::stdin()
+        .read_line(&mut text)
+        .expect("Ошибка чтения ввода");
 
-        //filter нужен на случай ввода "details"  в кавычках (@ - на случай русской раскладки)
-        text
-            .trim()
-            .chars()
-            .filter(|ch| *ch != '"' && *ch != '@')
-            .collect::<String>()
-            .to_lowercase()
+    //filter нужен на случай ввода "details"  в кавычках (@ - на случай русской раскладки)
+    text.trim()
+        .chars()
+        .filter(|ch| *ch != '"' && *ch != '@')
+        .collect::<String>()
+        .to_lowercase()
 }
 
-fn inputting_sheet_name() -> String {
+fn entered_sheet_name() -> String {
     loop {
         let _ = Term::stdout().clear_screen();
         println!("Введите имя листа:");

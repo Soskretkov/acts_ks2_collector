@@ -1,9 +1,9 @@
-use std::path::PathBuf;
+use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
+use ks2_etl::{ErrDescription, ErrName};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
-use ks2_etl::{ErrDescription, ErrName};
-use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
+use std::path::PathBuf;
 
 #[derive(PartialEq)]
 pub enum Required {
@@ -54,10 +54,7 @@ pub struct Book {
 impl Book {
     pub fn new(path: PathBuf) -> Result<Self, XlsxError> {
         let data: Xlsx<_> = calamine::open_workbook(&path)?;
-        Ok(Book {
-            path,
-            data,
-        })
+        Ok(Book { path, data })
     }
 }
 
