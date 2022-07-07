@@ -3,7 +3,7 @@ Collects data from the form header and form totals and loads the collected data 
 
 «KS-2» is a form of an acceptance report for work performed in construction, used in the Russian Federation. The primary document is used in contractual relations in capital construction, installation and repair on any objects: industrial, residential, civil and other purposes. With the help of the act, the contractor reports to the customer about the work performed.
 
-● The program will collect data from Excel files in the specified folder and all subfolders.
+● The program will collect data from Excel files to the specified path, including subfolders.
 
 ● Only files with «.xlsm» extension are collected.
 

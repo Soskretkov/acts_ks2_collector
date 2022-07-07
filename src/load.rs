@@ -1,5 +1,6 @@
 use crate::extract::Book;
 use crate::transform::{Act, DataVariant, TotalsRow};
+use calamine::XlsxError;
 use ks2_etl::variant_eq;
 use regex::Regex;
 use std::path::PathBuf;
@@ -689,7 +690,7 @@ fn write_formula(
     Ok(())
 }
 
-pub fn directory_traversal(path: PathBuf) -> (Vec<Book>, u32) {
+pub fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
     let prefix = path.to_string_lossy().to_string();
     let is_excluded_file = |entry: &DirEntry| -> bool {
         entry
@@ -700,7 +701,7 @@ pub fn directory_traversal(path: PathBuf) -> (Vec<Book>, u32) {
             .contains('@')
     };
 
-    let mut result_vector: Vec<Book> = vec![];
+    let mut books_vector = vec![];
     let mut excluded_files_counter = 0_u32;
 
     for entry in WalkDir::new(path)
@@ -717,8 +718,8 @@ pub fn directory_traversal(path: PathBuf) -> (Vec<Book>, u32) {
             excluded_files_counter += 1;
             continue;
         }
-        let temp_book = Book::new(entry.into_path()).unwrap();
-        result_vector.push(temp_book);
+        let temp_book = Book::new(entry.into_path());
+        books_vector.push(temp_book);
     }
-    (result_vector, excluded_files_counter)
+    (books_vector, excluded_files_counter)
 }

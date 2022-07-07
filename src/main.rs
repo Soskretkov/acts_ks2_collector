@@ -1,13 +1,13 @@
 use console::Term; // для очистки консоли перед выводом полезных сообщений
-use std::env; // имя, которое у ".exe" будет присвоено полученному файлу Excel
-use std::thread; // для засыпания на секунду-две
-use std::time::Duration; // для засыпания на секунду-две
+use std::env; // имя ".exe" будет присвоено файлу Excel
+use std::thread; // для засыпания на секунду-две при печати сообщений
+use std::time::Duration; // для засыпания на секунду-две при печати сообщений
 use xlsxwriter::Workbook;
 mod extract;
 mod load;
 mod transform;
 mod ui;
-use crate::extract::{Sheet, SEARCH_REFERENCE_POINTS};
+use crate::extract::{Book, Sheet, SEARCH_REFERENCE_POINTS};
 use crate::load::Report;
 use crate::transform::Act;
 
@@ -30,9 +30,26 @@ fn main() {
         let wb = Workbook::new(&report_name);
         let mut report = Report::new(wb);
 
-        let (mut result_vector, excluded_files_counter) = load::directory_traversal(path);
+        let (books_vector, excluded_files_counter) = match path.is_dir() {
+            true => {
+                let temp_res = load::directory_traversal(&path);
+                if (temp_res.0).len() == 0 {
+                    let _ = Term::stdout().clear_screen();
+                    println!(
+                        "Нет файлов для сбора по указанному пути: {}",
+                        path.display()
+                    );
+                    thread::sleep(Duration::from_secs(1));
+                    continue 'main_loop;
+                }
+                temp_res
+            }
+            false if path.is_file() => (vec![Book::new(path)], 0_u32),
+            _ => panic!("Введенный пользователем путь не является папкой или файлом"),
+        };
 
-        for book in result_vector.iter_mut() {
+        for mut item in books_vector.into_iter() {
+            let book = item.as_mut().unwrap();
             let wrapped_sheet = Sheet::new(
                 book,
                 &sh_name_lowercase,
@@ -97,13 +114,13 @@ fn main() {
         println!("Успешно выполнено.\nСобрано {} файла(ов).", files_counter);
         if excluded_files_counter > 0 {
             println!(
-                "{} файла(ов), помеченно «@», для исключения.",
+                "{} файла(ов) не были собраны, поскольку они помечены \"@\" для исключения.",
                 excluded_files_counter
             );
         }
         println!("\nСоздан файл \"{}\"", report_name);
         thread::sleep(Duration::from_secs(1));
-        println!("\n\n\n\n");
+        println!("\n\n");
         continue 'main_loop;
     }
 }

@@ -6,17 +6,23 @@ use std::time::Duration; // для засыпания на секунду-две
 
 pub fn session() -> (PathBuf, String) {
     loop {
-        let entered_path = inputting_path();
-        let path = PathBuf::from(&entered_path);
+        let entered_text = inputting_path();
+        let path = PathBuf::from(&entered_text);
 
         if path.exists() {
             break (path, entered_sheet_name());
         }
 
-        let len_path = entered_path.chars().count();
+        //filter нужен на случай ввода "details"  в кавычках (@ - на случай русской раскладки)
+        let keyword = entered_text
+            .chars()
+            .filter(|ch| *ch != '"' && *ch != '@')
+            .collect::<String>()
+            .to_lowercase();
+        let len_text = keyword.chars().count();
 
-        match entered_path {
-            x if len_path < 9
+        match keyword {
+            x if len_text < 9
                 && x.matches([
                     'd', 'e', 't', 'a', 'i', 'l', 's', 'в', 'у', 'е', 'ф', 'ш', 'д', 'ы',
                 ])
@@ -39,12 +45,8 @@ fn inputting_path() -> String {
         .read_line(&mut text)
         .expect("Ошибка чтения ввода");
 
-    //filter нужен на случай ввода "details"  в кавычках (@ - на случай русской раскладки)
-    text.trim()
-        .chars()
-        .filter(|ch| *ch != '"' && *ch != '@')
-        .collect::<String>()
-        .to_lowercase()
+    text = text.trim().to_string();
+    text
 }
 
 fn entered_sheet_name() -> String {
@@ -75,8 +77,8 @@ pub fn show_first_lines() {
 #[rustfmt::skip]
 pub fn show_help() {
     println!("------------------------------------------------------------------------------------------------------------\n");
-    println!("● Используйте CTRL + C, чтобы вставить скопированный путь к папке, из которой необходимо собрать данные.");
-    println!("● Программа будет собирать данные из файлов в указанной папке и всех вложенных папках.");
+    println!("● Используйте CTRL + C, чтобы вставить скопированный путь к папке или файлу с данными, которые вы хотите собрать.");
+    println!("● Программа будет собирать данные из файлов Excel по указанному пути, включая вложенные папки.");
     println!("● Собираются только файлы с расширением «.xlsm».");
     println!("● Полезный совет:\n    - переименуйте файл Excel, добавив символ «@», и программа не будет собирать его данные;");
     println!("    - переименуйте папку, добавив символ «@», и программа проигнорирует ее содержимое.");
