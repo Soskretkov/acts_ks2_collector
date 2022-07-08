@@ -1,4 +1,5 @@
 use console::Term;
+use dialoguer::Input;
 use std::io;
 use std::path::PathBuf;
 use std::thread; // для засыпания на секунду-две
@@ -50,25 +51,17 @@ fn inputting_path() -> String {
 }
 
 fn entered_sheet_name() -> String {
-    loop {
-        let _ = Term::stdout().clear_screen();
-        println!("Введите имя листа:");
-        thread::sleep(Duration::from_secs(1));
-        println!("Нет разницы, вводите ли вы «Лист1» или «лист1» - способ указания листа не чувствителен к регистру.");
-        let mut temp_sh_name = String::new();
-
-        io::stdin()
-            .read_line(&mut temp_sh_name)
-            .expect("Ошибка чтения ввода");
-
-        temp_sh_name = temp_sh_name.trim().to_string();
-
-        let len_text = temp_sh_name.chars().count();
-
-        if len_text > 0 {
-            return temp_sh_name;
-        }
-    }
+    let _ = Term::stdout().clear_screen();
+    let temp_sh_name: String = Input::new()
+        .with_prompt(
+            r#"Подтвердите имя листа.
+Вы можете изменить имя, способ указания не чувствителен к регистру.
+Имя листа"#,
+        )
+        .with_initial_text("Лист1")
+        .interact_text()
+        .expect("Ошибка чтения ввода");
+        temp_sh_name
 }
 
 pub fn show_first_lines() {
