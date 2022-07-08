@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::thread; // для засыпания на секунду-две
 use std::time::Duration; // для засыпания на секунду-две // для очистки консоли перед выводом полезных сообщений
 
-pub fn session() -> (PathBuf, String) {
+pub fn user_input() -> (PathBuf, String) {
     loop {
         let entered_text = inputting_path();
         let path = PathBuf::from(&entered_text);

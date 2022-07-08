@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
+use walkdir::{DirEntry, WalkDir};
 
 #[derive(PartialEq)]
 pub enum Required {
@@ -182,4 +183,38 @@ impl<'a> Sheet {
             range_start,
         })
     }
+}
+
+pub fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
+    let prefix = path.to_string_lossy().to_string();
+    let is_excluded_file = |entry: &DirEntry| -> bool {
+        entry
+            .path()
+            .strip_prefix(&prefix)
+            .unwrap()
+            .to_string_lossy()
+            .contains('@')
+    };
+
+    let mut books_vector = vec![];
+    let mut excluded_files_counter = 0_u32;
+
+    for entry in WalkDir::new(path)
+        .into_iter()
+        .filter_map(|e| e.ok()) //будет молча пропускать каталоги, на доступ к которым у владельца запущенного процесса нет разрешения
+        .filter(|e| {
+            e.file_name()
+                .to_str()
+                .map(|s| !s.starts_with('~') & s.ends_with(".xlsm"))
+                .unwrap_or(false)
+        })
+    {
+        if is_excluded_file(&entry) {
+            excluded_files_counter += 1;
+            continue;
+        }
+        let temp_book = Book::new(entry.into_path());
+        books_vector.push(temp_book);
+    }
+    (books_vector, excluded_files_counter)
 }
