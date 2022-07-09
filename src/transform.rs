@@ -9,6 +9,7 @@ pub struct Act {
     pub names_of_header: &'static [DesiredData; 15],
     pub data_of_header: Vec<Option<DataVariant>>,
     pub data_of_totals: Vec<TotalsRow>,
+    pub start_row_of_totals: usize,
 }
 
 impl Act {
@@ -27,7 +28,13 @@ impl Act {
             })
             .collect();
 
-        let data_of_totals = Self::raw_totals(&sheet).unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
+        let (start_row_of_totals, start_col_of_totals) = *sheet
+            .search_points
+            .get("стоимость материальных ресурсов (всего)")
+            .unwrap(); //unwrap не требует обработки
+
+        let data_of_totals =
+            Self::get_totals(&sheet, (start_row_of_totals, start_col_of_totals)).unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
 
         Ok(Act {
             path: sheet.path.to_string_lossy().to_string(),
@@ -35,6 +42,7 @@ impl Act {
             names_of_header: &DESIRED_DATA_ARRAY,
             data_of_header,
             data_of_totals,
+            start_row_of_totals,
         })
     }
     fn cells_addreses_in_header(
@@ -83,12 +91,11 @@ impl Act {
         temp_vec
     }
 
-    fn raw_totals(sheet: &Sheet) -> Result<Vec<TotalsRow>, String> {
-        let (starting_row, starting_col) = *sheet
-            .search_points
-            .get("стоимость материальных ресурсов (всего)")
-            .unwrap(); //unwrap не требует обработки
-
+    fn get_totals(
+        sheet: &Sheet,
+        first_row_address: (usize, usize),
+    ) -> Result<Vec<TotalsRow>, String> {
+        let (starting_row, starting_col) = first_row_address;
         let total_row = sheet.data.get_size().0;
         let base_col = starting_col + 6;
         let current_col = starting_col + 9;

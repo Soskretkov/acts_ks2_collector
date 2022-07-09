@@ -61,7 +61,7 @@ fn entered_sheet_name() -> String {
         .with_initial_text("Лист1")
         .interact_text()
         .expect("Ошибка чтения ввода");
-        temp_sh_name
+    temp_sh_name
 }
 
 pub fn show_first_lines() {

@@ -36,19 +36,27 @@ pub enum Source {
 #[derive(Debug)]
 pub struct PrintPart {
     vector: Vec<OutputData>,
-    total_col: u16,
+    number_of_columns: u16,
 }
 impl PrintPart {
     pub fn new(vector: Vec<OutputData>) -> Option<PrintPart> {
-        let total_col = Self::count_col(&vector);
+        let number_of_columns = Self::count_col(&vector);
 
-        Some(PrintPart { vector, total_col })
+        Some(PrintPart {
+            vector,
+            number_of_columns,
+        })
     }
     pub fn get_number_of_columns(&self) -> u16 {
-        self.total_col
+        self.number_of_columns
     }
 
-    pub fn get_column(&self, kind: &str, name: &str, matches: Matches) -> Option<(usize, u16)> {
+    pub fn get_index_and_address_by_columns(
+        &self,
+        kind: &str,
+        name: &str,
+        matches: Matches,
+    ) -> Option<(usize, u16)> {
         let src = match kind {
             "base" => Source::AtBasePrices("".to_string(), matches.clone()),
             "curr" => Source::AtCurrPrices("".to_string(), matches.clone()),
@@ -118,7 +126,7 @@ fn PrintPart_test() {
     assert_eq!(&29, &printpart.get_number_of_columns());
     assert_eq!(
         Some((6, 21)),
-        printpart.get_column(
+        printpart.get_index_and_address_by_columns(
             "curr",
             "Стоимость материальных ресурсов (всего)",
             Matches::Exact
@@ -126,7 +134,7 @@ fn PrintPart_test() {
     );
     assert_eq!(
         Some((4, 10)),
-        printpart.get_column("curr", "Накладные расходы", Matches::Contains)
+        printpart.get_index_and_address_by_columns("curr", "Накладные расходы", Matches::Contains)
     );
 }
 pub struct Report {
@@ -363,12 +371,12 @@ impl<'a> Report {
             let (part, column_information, corr) = match kind {
                 "base" => (
                     "part_base",
-                    part_base.get_column(kind, name, Matches::Exact),
+                    part_base.get_index_and_address_by_columns(kind, name, Matches::Exact),
                     0,
                 ),
                 "curr" => (
                     "part_curr",
-                    part_curr.get_column(kind, name, Matches::Exact),
+                    part_curr.get_index_and_address_by_columns(kind, name, Matches::Exact),
                     part_base.get_number_of_columns(),
                 ),
                 _ => unreachable!("операция не над итоговыми строками акта"),
@@ -381,7 +389,7 @@ impl<'a> Report {
                     index,
                     col_number_in_vec,
                 )),
-                _ => match part_main.get_column(kind, name, Matches::Exact) {
+                _ => match part_main.get_index_and_address_by_columns(kind, name, Matches::Exact) {
                     Some((index, col_number_in_vec)) => Some((
                         "part_main",
                         corr + part_main.get_number_of_columns(),
