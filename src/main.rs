@@ -105,7 +105,7 @@ fn main() {
                 continue 'main_loop;
             };
         }
-        let files_counter = report.empty_row - 1;
+        let files_counter = report.body_size;
         if report.end().unwrap().close().is_err() {
             println!(
                     "Возникла ошибка, вероятная причина:\nне закрыт файл Excel с результатами прошлого сбора."

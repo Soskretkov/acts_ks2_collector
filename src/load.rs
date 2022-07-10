@@ -60,13 +60,21 @@ impl PrintPart {
         let src = match kind {
             "base" => Source::AtBasePrices("".to_string(), matches.clone()),
             "curr" => Source::AtCurrPrices("".to_string(), matches.clone()),
-            _ => unreachable!("операция не над итоговыми строками акта"),
+            "calc" => Source::Calculate(""),
+            "header" => Source::InTableHeader(""),
+            _ => panic!(),
         };
 
         let mut counter = 0;
         let mut index = 0;
         for outputdata in self.vector.iter() {
             match outputdata {
+                OutputData {
+                    source: Source::Calculate(text) | Source::InTableHeader(text),
+                    ..
+                } if ks2_etl::variant_eq(&outputdata.source, &src) && &name == text => {
+                    return Some((index, counter));
+                }
                 OutputData {
                     source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
                     ..
@@ -142,7 +150,8 @@ pub struct Report {
     pub part_main: PrintPart,
     pub part_base: Option<PrintPart>,
     pub part_curr: Option<PrintPart>,
-    pub empty_row: u32,
+    pub skip_row: u32,
+    pub body_size: u32,
 }
 
 impl<'a> Report {
@@ -177,6 +186,7 @@ impl<'a> Report {
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Всего с НР и СП (тек".to_string(), Matches::Contains)},
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtCurrPrices("Всего с НР и СП (баз".to_string(), Matches::Contains)},
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1".to_string(), Matches::Exact)},
+            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtCurrPrices("Итого с К = 1".to_string(), Matches::Exact)},
             // OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
             // OutputData{rename: None,                                            moving: Moving::Yes, expected_columns: 1, source: Source::AtBasePrices("ы", Matches::Contains)},
         ];
@@ -194,7 +204,8 @@ impl<'a> Report {
             part_main,
             part_base: None,
             part_curr: None,
-            empty_row: 1,
+            skip_row: 1,
+            body_size: 0,
         }
     }
 
@@ -212,7 +223,7 @@ impl<'a> Report {
         for totalsrow in act.data_of_totals.iter() {
             Self::write_totals(self, totalsrow)?;
         }
-        self.empty_row += 1;
+        self.body_size += 1;
         Ok(())
     }
     fn write_header(&mut self, act: &Act) -> Result<(), String> {
@@ -231,7 +242,7 @@ impl<'a> Report {
         };
 
         let mut sh = wrapped_sheet.unwrap(); //_or(
-        let row = self.empty_row;
+        let row = self.skip_row + self.body_size + 1;
 
         let mut column = 0_u16;
         for item in self.part_main.vector.iter() {
@@ -365,7 +376,7 @@ impl<'a> Report {
         let part_main = &self.part_main;
         let part_base = self.part_base.as_ref().unwrap();
         let part_curr = self.part_curr.as_ref().unwrap();
-        let row = self.empty_row;
+        let row = self.skip_row + self.body_size + 1;
 
         let get_part = |kind: &str, name: &str| {
             let (part, column_information, corr) = match kind {
@@ -562,7 +573,7 @@ impl<'a> Report {
             .get_worksheet("Result")
             .ok_or("Не удается записать результат в файл Excel")?;
 
-        let first_row = self
+        let header_name: Vec<&OutputData> = self
             .part_main
             .vector
             .iter()
@@ -573,10 +584,45 @@ impl<'a> Report {
                             || matches!(outputdata.source, Source::AtCurrPrices(_, _))))
             })
             .chain(self.part_base.as_ref().unwrap().vector.iter())
-            .chain(self.part_curr.as_ref().unwrap().vector.iter());
+            .chain(self.part_curr.as_ref().unwrap().vector.iter())
+            .collect();
 
-        let mut acc = 0;
-        for outputdata in first_row {
+        let header_row = self.skip_row;
+
+        // Это формат для заголовка excel-таблицы
+        let fmt_header = self
+            .book
+            .add_format()
+            .set_bold()
+            .set_text_wrap() // перенос строк внутри ячейки
+            .set_align(FormatAlignment::VerticalTop)
+            .set_align(FormatAlignment::Center)
+            .set_border(xlsxwriter::FormatBorder::Thin);
+
+        let fmt_first_row_num = self
+            .book
+            .add_format()
+            .set_bold()
+            .set_align(FormatAlignment::VerticalTop)
+            .set_shrink() // автоуменьшение шрифта текста, если не влез в ячейку
+            .set_border(xlsxwriter::FormatBorder::Thin)
+            .set_font_size(12.)
+            .set_font_color(xlsxwriter::FormatColor::Custom(2050429))
+            .set_num_format(r#"#,##0.00____;-#,##0.00____;"-"____"#);
+
+        let fmt_first_row_str = self
+            .book
+            .add_format()
+            .set_bold()
+            .set_align(FormatAlignment::VerticalTop)
+            .set_align(FormatAlignment::Center)
+            .set_shrink() // автоуменьшение шрифта текста, если не влез в ячейку
+            .set_border(xlsxwriter::FormatBorder::Thin)
+            .set_font_size(12.)
+            .set_font_color(xlsxwriter::FormatColor::Custom(2050429));
+
+        let mut counter = 0;
+        for outputdata in header_name.iter() {
             let prefix = match outputdata.source {
                 Source::AtBasePrices(_, _) => Some("БЦ"),
                 Source::AtCurrPrices(_, _) => Some("TЦ"),
@@ -601,45 +647,78 @@ impl<'a> Report {
             };
 
             for exp_col in 0..outputdata.expected_columns {
-                //Ниже, включая for это вычисляется нужная ширина столбца при переносе строк в ячейке
-                let name_len = name.chars().count() / 2;
-                let mut first_line_len = 0;
-                for word in name.split(' ') {
-                    first_line_len += word.chars().count() + 1;
-                    if first_line_len > name_len {
-                        break;
-                    }
-                }
-                let width = 11.max(first_line_len) as f64;
+                let col = counter + exp_col;
+                write_string(&mut sh, header_row, col, &name, Some(&fmt_header))?;
 
-                let col = acc + exp_col;
-                write_string(&mut sh, 0, col, &name, None)?;
+                //вычисляется ширина столбца excel при переносе строк в ячейке
+                let width = if counter < self.part_main.number_of_columns {
+                    let name_len = name.chars().count() / 2;
+                    let mut first_line_len = 0;
+                    for word in name.split(' ') {
+                        first_line_len += word.chars().count() + 1;
+                        if first_line_len > name_len {
+                            break;
+                        }
+                    }
+                    11.max(first_line_len) as f64
+                } else {
+                    20.11
+                };
+
                 sh.set_column(col, col, width, None);
             }
-            acc += outputdata.expected_columns;
+            counter += outputdata.expected_columns;
         }
 
+        let last_row = self.skip_row + self.body_size;
         let last_col = self.part_main.get_number_of_columns()
-            + self.part_base.unwrap().get_number_of_columns()
-            + self.part_curr.unwrap().get_number_of_columns()
+            + self.part_base.as_ref().unwrap().get_number_of_columns()
+            + self.part_curr.as_ref().unwrap().get_number_of_columns()
             - 1;
 
-        sh.autofilter(0, 0, self.empty_row - 1, last_col);
+        let first_row_tab_body = header_row + 1;
+        sh.set_row(header_row - 1, 29., None);
+        sh.set_row(header_row, 43., None);
+        sh.autofilter(header_row, 0, last_row, last_col);
 
-        // Это формат для заголовка таблицы
-        let fmt_bold = self
-            .book
-            .add_format()
-            .set_bold()
-            .set_text_wrap() // перенос строк внутри ячейки
-            .set_align(FormatAlignment::VerticalTop)
-            .set_align(FormatAlignment::Center);
+        sh.freeze_panes(first_row_tab_body, 0);
 
-        sh.set_row(0, 29., Some(&fmt_bold));
+        let (_, column_sbt_103) = self
+            .part_main
+            .get_index_and_address_by_columns("calc", "Акт №", Matches::Exact)
+            .unwrap();
+        let col_prefix = column_written_with_letters(column_sbt_103);
+        let formula = format!(
+            "=SUBTOTAL(103,{col_prefix}{start}:{col_prefix}{end})&\" шт.\"",
+            start = first_row_tab_body + 1,
+            end = last_row + 1
+        );
+        write_formula(
+            &mut sh,
+            header_row - 1,
+            column_sbt_103,
+            &formula,
+            Some(&fmt_first_row_str),
+        )?;
 
-        sh.freeze_panes(1, 2);
-
+        // Вставка формул с подсчетом сумм по excel-таблице
+        for column_sbt_109 in self.part_main.get_number_of_columns()..=last_col {
+            let col_prefix = column_written_with_letters(column_sbt_109);
+            let formula = format!(
+                "=SUBTOTAL(109,{col_prefix}{start}:{col_prefix}{end})",
+                start = first_row_tab_body + 1,
+                end = last_row + 1
+            );
+            write_formula(
+                &mut sh,
+                header_row - 1,
+                column_sbt_109,
+                &formula,
+                Some(&fmt_first_row_num),
+            )?;
+        }
         // sh.set_default_row(29.0, false);
+
         Ok(self.book)
     }
 }
@@ -692,4 +771,31 @@ fn write_formula(
     //     )),
     // );
     Ok(())
+}
+fn column_written_with_letters(column: u16) -> String {
+    let integer = column / 26;
+    let remainder = (column % 26) as u8;
+    let ch = char::from(remainder + 65).to_ascii_uppercase().to_string();
+
+    if integer == 0 {
+        return ch;
+    }
+
+    column_written_with_letters(integer - 1) + &ch
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn column_in_excel_with_letters_01() {
+        use super::column_written_with_letters;
+        let result = column_written_with_letters(886);
+        assert_eq!(result, "AHC".to_string());
+    }
+    #[test]
+    fn column_in_excel_with_letters_02() {
+        use super::column_written_with_letters;
+        let result = column_written_with_letters(1465);
+        assert_eq!(result, "BDJ".to_string());
+    }
 }
