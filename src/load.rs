@@ -1,7 +1,7 @@
 use crate::transform::{Act, DataVariant, TotalsRow};
 use ks2_etl::variant_eq;
 use regex::Regex;
-use xlsxwriter::{DateTime, Format, FormatAlignment, Workbook, Worksheet};
+use xlsxwriter::{DateTime, Format, FormatAlignment, Workbook, Worksheet, RowColOptions};
 
 #[derive(Debug)]
 pub struct OutputData {
@@ -227,6 +227,11 @@ impl<'a> Report {
         Ok(())
     }
     fn write_header(&mut self, act: &Act) -> Result<(), String> {
+        let fmt_num = self
+            .book
+            .add_format()
+            .set_num_format(r#"#,##0.00____;-#,##0.00____;"-"____"#);
+
         let fmt_url = self
             .book
             .add_format()
@@ -264,7 +269,7 @@ impl<'a> Report {
                     "Отчетный период окончание",
                 ];
                 let name_is_date = date_list.contains(&name);
-                let format = if name_is_date { Some(&fmt_date) } else { None };
+                let format = if name_is_date { Some(&fmt_date) } else { Some(&fmt_num) };
 
                 match datavariant {
                     Some(DataVariant::String(text)) if name_is_date => {
@@ -281,7 +286,7 @@ impl<'a> Report {
                         }
                     }
                     Some(DataVariant::String(text)) => {
-                        write_string(&mut sh, row, column, text, format)?
+                        write_string(&mut sh, row, column, text, None)?
                     }
                     Some(DataVariant::Float(number)) => {
                         write_number(&mut sh, row, column, *number, format)?
@@ -341,7 +346,7 @@ impl<'a> Report {
                         .replace(',', ".")
                         .replace(' ', "")
                         .parse::<f64>()
-                        .map(|number| write_number(&mut sh, row, column, number * 1000., None)).unwrap();
+                        .map(|number| write_number(&mut sh, row, column, number * 1000., Some(&fmt_num))).unwrap();
                 }
             }
             "Папка (ссылка)" => {
@@ -412,6 +417,11 @@ impl<'a> Report {
             }
         };
 
+        let fmt_num = self
+            .book
+            .add_format()
+            .set_num_format(r#"#,##0.00____;-#,##0.00____;"-"____"#);
+
         let mut write_if_some =
             |kind: &str, column_info: Option<(&str, u16, usize, u16)>| -> Result<(), String> {
                 if let Some((part, corr, index, col_number_in_vec)) = column_info {
@@ -436,7 +446,7 @@ impl<'a> Report {
                                 row,
                                 col_number_in_vec + corr + number_of_col as u16,
                                 *number,
-                                None,
+                                Some(&fmt_num),
                             )?;
                         }
                     }
@@ -717,7 +727,7 @@ impl<'a> Report {
                 Some(&fmt_first_row_num),
             )?;
         }
-        // sh.set_default_row(29.0, false);
+        // let x = sh.set_column_opt(0, 30, 10, format, Some(RowColOptions));
 
         Ok(self.book)
     }
