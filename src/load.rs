@@ -1,7 +1,7 @@
 use crate::transform::{Act, DataVariant, TotalsRow};
 use ks2_etl::variant_eq;
 use regex::Regex;
-use xlsxwriter::{DateTime, Format, FormatAlignment, Workbook, Worksheet, RowColOptions};
+use xlsxwriter::{DateTime, Format, FormatAlignment, Workbook, Worksheet};
 
 #[derive(Debug)]
 pub struct OutputData {
@@ -67,7 +67,13 @@ impl PrintPart {
 
         let mut counter = 0;
         let mut index = 0;
-        for outputdata in self.vector.iter() {
+
+        let vec_iter = self
+            .vector
+            .iter()
+            .filter(|outputdata| outputdata.moving != Moving::Del);
+
+        for outputdata in vec_iter {
             match outputdata {
                 OutputData {
                     source: Source::Calculate(text) | Source::InTableHeader(text),
@@ -269,7 +275,11 @@ impl<'a> Report {
                     "Отчетный период окончание",
                 ];
                 let name_is_date = date_list.contains(&name);
-                let format = if name_is_date { Some(&fmt_date) } else { Some(&fmt_num) };
+                let format = if name_is_date {
+                    Some(&fmt_date)
+                } else {
+                    Some(&fmt_num)
+                };
 
                 match datavariant {
                     Some(DataVariant::String(text)) if name_is_date => {
