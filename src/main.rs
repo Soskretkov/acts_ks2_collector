@@ -1,4 +1,4 @@
-use console::Term; // для очистки консоли перед выводом полезных сообщений
+use console::{Style, Term}; // для очистки консоли перед выводом полезных сообщений
 use std::env; // имя ".exe" будет присвоено файлу Excel
 use std::thread; // для засыпания на секунду-две при печати сообщений
 use std::time::Duration; // для засыпания на секунду-две при печати сообщений
@@ -16,9 +16,9 @@ fn main() {
     ui::show_first_lines();
     ui::show_help();
     'main_loop: loop {
-        // let (path, sh_name) = ui::user_input();
-        let sh_name = "Лист1".to_owned();
-        let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
+        let (path, sh_name) = ui::user_input();
+        // let sh_name = "Лист1".to_owned();
+        // let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
 
         let sh_name_lowercase = sh_name.to_lowercase();
 
@@ -33,7 +33,7 @@ fn main() {
         let mut report = Report::new(wb);
 
         let _ = Term::stdout().clear_screen();
-        let (books_vector, excluded_files_counter) = match path.is_dir() {
+        let (books_vector, _excluded_files_counter) = match path.is_dir() {
             true => {
                 let temp_res = extract::directory_traversal(&path);
                 let books_vector_len = (temp_res.0).len();
@@ -54,7 +54,7 @@ fn main() {
                     } else {
                         println!("Среди них нет файлов, помеченных как исключенные.");
                     }
-                    println!("\nИдет обработка, ожидайте...\n");
+                    println!("\nИдет обработка, ожидайте...");
                 }
                 temp_res
             }
@@ -62,6 +62,8 @@ fn main() {
             _ => panic!("Введенный пользователем путь не является папкой или файлом"),
         };
 
+        let cyan = Style::new().cyan();
+        let red = Style::new().red();
         for mut item in books_vector.into_iter() {
             let book = item.as_mut().unwrap();
             let wrapped_sheet = Sheet::new(
@@ -75,7 +77,8 @@ fn main() {
                 Ok(x) => x,
                 Err(err) => {
                     if let Some(text) = ks2_etl::error_message(err, &sh_name) {
-                        println!("\nВозникла ошибка.\n{}", text);
+                        let _ = Term::stdout().clear_last_lines(1);
+                        println!("\n{}\n{}", red.apply_to("Возникла ошибка."), text);
                         println!("\nФайл, вызывающий ошибку: {}", book.path.display());
                         thread::sleep(Duration::from_secs(3));
                         println!("\n\n\n\n");
@@ -89,7 +92,8 @@ fn main() {
             let act = match wrapped_act {
                 Ok(x) => x,
                 Err(err) => {
-                    println!("\nВозникла ошибка.\n{}", err);
+                    let _ = Term::stdout().clear_last_lines(1);
+                    println!("\n{}\n{}", red.apply_to("Возникла ошибка."), err);
                     println!("\nФайл, вызывающий ошибку: {}", book.path.display());
                     thread::sleep(Duration::from_secs(3));
                     println!("\n\n\n\n");
@@ -98,7 +102,8 @@ fn main() {
             };
 
             if let Err(err) = report.write(&act) {
-                println!("\nВозникла ошибка.\n{}", err);
+                let _ = Term::stdout().clear_last_lines(1);
+                println!("\n{}\n{}", red.apply_to("Возникла ошибка."), err);
                 println!("\nФайл, вызывающий ошибку: {}", book.path.display());
                 thread::sleep(Duration::from_secs(3));
                 println!("\n\n\n\n");
@@ -107,21 +112,22 @@ fn main() {
         }
         let files_counter = report.body_size;
         if report.end().unwrap().close().is_err() {
-            println!(
-                    "Возникла ошибка, вероятная причина:\nне закрыт файл Excel с результатами прошлого сбора."
-                );
+            let _ = Term::stdout().clear_last_lines(3);
+            println!("\n{}", red.apply_to("Возникла ошибка."));
+            println!("Вероятная причина: не закрыт файл Excel с результатами прошлого сбора.");
             thread::sleep(Duration::from_secs(3));
             println!("\n\n\n\n");
             continue 'main_loop;
         }
-
-        println!("Успешно выполнено.\nСобрано {} файла(ов).", files_counter);
-        if excluded_files_counter > 0 {
-            println!(
-                "{} файла(ов) не были собраны, поскольку они помечены \"@\" для исключения.",
-                excluded_files_counter
-            );
-        }
+        let _ = Term::stdout().clear_last_lines(1);
+        println!("{}", cyan.apply_to("Успешно выполнено."));
+        println!("Собрано {} файла(ов).", files_counter);
+        // if excluded_files_counter > 0 {
+        //     println!(
+        //         "{} файла(ов) проигнорировано, поскольку они помечены \"@\" для исключения.",
+        //         excluded_files_counter
+        //     );
+        // }
         println!("\nСоздан файл \"{}\"", report_name);
         thread::sleep(Duration::from_secs(1));
         println!("\n\n");

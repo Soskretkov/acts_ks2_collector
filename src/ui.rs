@@ -59,7 +59,7 @@ fn entered_sheet_name() -> String {
 Имя листа"#,
         )
         .with_initial_text("Лист1")
-        .interact_text()
+        .interact()
         .expect("Ошибка чтения ввода");
     temp_sh_name
 }

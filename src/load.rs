@@ -68,12 +68,11 @@ impl PrintPart {
         let mut counter = 0;
         let mut index = 0;
 
-        let vec_iter = self
-            .vector
-            .iter()
-            .filter(|outputdata| outputdata.moving != Moving::Del);
+        for outputdata in self.vector.iter() {
+            if outputdata.moving == Moving::Del {
+                continue;
+            }
 
-        for outputdata in vec_iter {
             match outputdata {
                 OutputData {
                     source: Source::Calculate(text) | Source::InTableHeader(text),
@@ -189,6 +188,7 @@ impl<'a> Report {
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Отчетный период начало")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Отчетный период окончание")},
             OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Метод расчета")},
+            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Затраты труда, чел.-час")},
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Всего с НР и СП (тек".to_string(), Matches::Contains)},
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtCurrPrices("Всего с НР и СП (баз".to_string(), Matches::Contains)},
             OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1".to_string(), Matches::Exact)},
@@ -587,6 +587,7 @@ impl<'a> Report {
         );
         (part_base, part_curr)
     }
+
     pub fn end(self) -> Result<Workbook, String> {
         let mut sh = self
             .book
@@ -641,6 +642,12 @@ impl<'a> Report {
             .set_font_size(12.)
             .set_font_color(xlsxwriter::FormatColor::Custom(2050429));
 
+        let formula_insertion_list = [
+            ("calc", "По смете в ц.2000г."),
+            ("calc", "Выполнение работ в ц.2000г."),
+            ("header", "Затраты труда, чел.-час"),
+        ];
+
         let mut counter = 0;
         for outputdata in header_name.iter() {
             let prefix = match outputdata.source {
@@ -648,33 +655,41 @@ impl<'a> Report {
                 Source::AtCurrPrices(_, _) => Some("TЦ"),
                 _ => None,
             };
-
-            let ending = match outputdata.rename {
-                Some(x) => x.to_owned(),
-                _ => match &outputdata.source {
-                    Source::InTableHeader(x) => x,
-                    Source::Calculate(x) => x,
-                    Source::AtBasePrices(x, _) => &x[..],
-                    Source::AtCurrPrices(x, _) => &x[..],
-                }
-                .to_owned(),
+            let name = match &outputdata.source {
+                Source::InTableHeader(x) => x,
+                Source::Calculate(x) => x,
+                Source::AtBasePrices(x, _) => &x[..],
+                Source::AtCurrPrices(x, _) => &x[..],
             };
 
-            let name = if let Some(x) = prefix {
-                x.to_owned() + " " + &ending
+            let renaming_name = match outputdata.rename {
+                Some(x) => x,
+                _ => name,
+            }
+            .to_owned();
+
+            let name_in_formula_insertion_list = formula_insertion_list
+                .iter()
+                .find(|item| item.1 == name)
+                .is_some();
+
+            let new_name = if let Some(x) = prefix {
+                x.to_owned() + " " + &renaming_name
             } else {
-                ending
+                renaming_name
             };
 
             for exp_col in 0..outputdata.expected_columns {
                 let col = counter + exp_col;
-                write_string(&mut sh, header_row, col, &name, Some(&fmt_header))?;
+                write_string(&mut sh, header_row, col, &new_name, Some(&fmt_header))?;
 
                 //вычисляется ширина столбца excel при переносе строк в ячейке
-                let width = if counter < self.part_main.number_of_columns {
-                    let name_len = name.chars().count() / 2;
+                let width = if counter < self.part_main.number_of_columns
+                    && !name_in_formula_insertion_list
+                {
+                    let name_len = new_name.chars().count() / 2;
                     let mut first_line_len = 0;
-                    for word in name.split(' ') {
+                    for word in new_name.split(' ') {
                         first_line_len += word.chars().count() + 1;
                         if first_line_len > name_len {
                             break;
@@ -698,46 +713,68 @@ impl<'a> Report {
 
         let first_row_tab_body = header_row + 1;
         sh.set_row(header_row - 1, 29., None);
-        sh.set_row(header_row, 43., None);
+        sh.set_row(header_row, 46.5, None);
         sh.autofilter(header_row, 0, last_row, last_col);
 
         sh.freeze_panes(first_row_tab_body, 0);
 
+        // Вставка формулы с подсчетом количества строк по excel-таблице
         let (_, column_sbt_103) = self
             .part_main
             .get_index_and_address_by_columns("calc", "Акт №", Matches::Exact)
             .unwrap();
         let col_prefix = column_written_with_letters(column_sbt_103);
-        let formula = format!(
+
+        let formula_sbt_103 = format!(
             "=SUBTOTAL(103,{col_prefix}{start}:{col_prefix}{end})&\" шт.\"",
             start = first_row_tab_body + 1,
             end = last_row + 1
         );
+
         write_formula(
             &mut sh,
             header_row - 1,
             column_sbt_103,
-            &formula,
+            &formula_sbt_103,
             Some(&fmt_first_row_str),
         )?;
 
         // Вставка формул с подсчетом сумм по excel-таблице
-        for column_sbt_109 in self.part_main.get_number_of_columns()..=last_col {
-            let col_prefix = column_written_with_letters(column_sbt_109);
-            let formula = format!(
-                "=SUBTOTAL(109,{col_prefix}{start}:{col_prefix}{end})",
+        let formula_sbt_109 = |col: u16| {
+            let temp_col_prefix = column_written_with_letters(col);
+            let temp_formula = format!(
+                "=SUBTOTAL(109,{temp_col_prefix}{start}:{temp_col_prefix}{end})",
                 start = first_row_tab_body + 1,
                 end = last_row + 1
             );
+            temp_formula
+        };
+
+        let mut col_to_insert_formulas =
+            formula_insertion_list
+                .into_iter()
+                .fold(Vec::<u16>::new(), |mut vec, item| {
+                    let (_, column_sbt_109) = self
+                        .part_main
+                        .get_index_and_address_by_columns(item.0, item.1, Matches::Exact)
+                        .unwrap();
+                    vec.push(column_sbt_109);
+                    vec
+                });
+
+        for i in self.part_main.get_number_of_columns()..=last_col {
+            col_to_insert_formulas.push(i as u16)
+        }
+
+        for column_sbt_109 in col_to_insert_formulas {
             write_formula(
                 &mut sh,
                 header_row - 1,
                 column_sbt_109,
-                &formula,
+                &formula_sbt_109(column_sbt_109),
                 Some(&fmt_first_row_num),
             )?;
         }
-        // let x = sh.set_column_opt(0, 30, 10, format, Some(RowColOptions));
 
         Ok(self.book)
     }

@@ -13,7 +13,7 @@ pub enum Required {
 }
 
 // Маленькими буквами из-за того что, например, "Доп. соглашение" Excel переведет в "Доп. Соглашение" если встать в ячейку и нажать Enter. Перестраховка от сюрпризов
-pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 8] = [
+pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 10] = [
     (0, Required::N, "исполнитель"),
     (0, Required::Y, "стройка"),
     (0, Required::Y, "объект"),
@@ -21,6 +21,8 @@ pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 8] = [
     (9, Required::Y, "доп. соглашение"),
     (5, Required::Y, "номер документа"),
     (3, Required::Y, "наименование работ и затрат"),
+    (11, Required::N, "зтр всего чел.-час"),
+    (0, Required::N, "итого по акту:"),
     (3, Required::Y, "стоимость материальных ресурсов (всего)"),
 ];
 
@@ -30,7 +32,7 @@ pub struct DesiredData {
     pub offset: Option<(&'static str, (i8, i8))>,
 }
 #[rustfmt::skip]
-pub const DESIRED_DATA_ARRAY: [DesiredData; 15] = [
+pub const DESIRED_DATA_ARRAY: [DesiredData; 16] = [
     DesiredData{name:"Исполнитель",                  offset: None},
     DesiredData{name:"Глава",                        offset: None},
     DesiredData{name:"Глава наименование",           offset: None},
@@ -46,6 +48,7 @@ pub const DESIRED_DATA_ARRAY: [DesiredData; 15] = [
     DesiredData{name:"Отчетный период начало",       offset: Some(("номер документа",                (2, 5)))},
     DesiredData{name:"Отчетный период окончание",    offset: Some(("номер документа",                (2, 6)))},
     DesiredData{name:"Метод расчета",                offset: Some(("наименование работ и затрат",    (-1, -3)))},
+    DesiredData{name:"Затраты труда, чел.-час",      offset: None},
 ];
 pub struct Book {
     pub path: PathBuf,

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub struct Act {
     pub path: String,
     pub sheetname: String,
-    pub names_of_header: &'static [DesiredData; 15],
+    pub names_of_header: &'static [DesiredData; 16],
     pub data_of_header: Vec<Option<DataVariant>>,
     pub data_of_totals: Vec<TotalsRow>,
     pub start_row_of_totals: usize,
@@ -58,7 +58,6 @@ impl Act {
         let temp_vec: Vec<Option<(usize, usize)>> = DESIRED_DATA_ARRAY.iter().fold(Vec::new(), |mut vec, shift| {
 
                 let temp_cells_address: Option<(usize, usize)> = match shift {
-                    // (_, Some((point_name, (row, col)))) => {
                     DesiredData{name: _, offset: Some((point_name, (row, col)))} => {
                         let temp = match *point_name {
                             "объект" => ((object_adr.0 as isize + *row as isize) as usize, (object_adr.1 as isize + *col as isize) as usize),
@@ -79,6 +78,16 @@ impl Act {
                         "Глава наименование" => match stroika_adr.0 + 2 == object_adr.0 {
                             true => Some((stroika_adr.0 + 1, stroika_adr.1 + 3)),
                             false => None,
+                        }
+                        "Затраты труда, чел.-час" => {
+                            let ttl = search_points.get("итого по акту:");
+                            let ztr = search_points.get("зтр всего чел.-час");
+
+                            if ztr.is_some() & ttl.is_some() {
+                                Some((ttl.unwrap().0, ztr.unwrap().1))
+                            } else {
+                                None
+                            }
                         }
                         _ => None,
                     },
