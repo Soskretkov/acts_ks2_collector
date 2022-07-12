@@ -1,8 +1,7 @@
 use console::{Style, Term}; // для очистки консоли перед выводом полезных сообщений
-use std::env; // имя ".exe" будет присвоено файлу Excel
+use std::env;
 use std::thread; // для засыпания на секунду-две при печати сообщений
-use std::time::Duration; // для засыпания на секунду-две при печати сообщений
-use xlsxwriter::Workbook;
+use std::time::Duration; // для засыпания на секунду-две при печати сообщений // имя ".exe" будет присвоено файлу Excel
 mod extract;
 mod load;
 mod transform;
@@ -16,21 +15,19 @@ fn main() {
     ui::show_first_lines();
     ui::show_help();
     'main_loop: loop {
-        let (path, sh_name) = ui::user_input();
-        // let sh_name = "Лист1".to_owned();
-        // let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
+        // let (path, sh_name) = ui::user_input();
+        let sh_name = "Лист1".to_owned();
+        let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
 
         let sh_name_lowercase = sh_name.to_lowercase();
 
-        let report_name_prefix = env::args()
+        let report_name = env::args()
             .next()
             .unwrap()
             .trim_end_matches(".exe")
-            .to_owned();
-
-        let report_name = report_name_prefix + ".xlsx";
-        let wb = Workbook::new(&report_name);
-        let mut report = Report::new(wb);
+            .to_owned()
+            + ".xlsx";
+        let mut report = Report::new(&report_name);
 
         let _ = Term::stdout().clear_screen();
         let (books_vector, _excluded_files_counter) = match path.is_dir() {
@@ -64,53 +61,62 @@ fn main() {
 
         let cyan = Style::new().cyan();
         let red = Style::new().red();
-        for mut item in books_vector.into_iter() {
-            let book = item.as_mut().unwrap();
-            let wrapped_sheet = Sheet::new(
-                book,
-                &sh_name_lowercase,
-                &SEARCH_REFERENCE_POINTS,
-                29, //передается для расчета смещения столбцов. Это сумма номеров столбцов Y-типа в DESIRED_DATA_ARRAY: 0 + 0 + 3 + 5 + 9 + 9 + 3.
-            );
+        let acts_vector = {
+            let mut temp_acts_vec = Vec::new();
+            for mut item in books_vector.into_iter() {
+                let book = item.as_mut().unwrap();
+                let wrapped_sheet = Sheet::new(
+                    book,
+                    &sh_name_lowercase,
+                    &SEARCH_REFERENCE_POINTS,
+                    29, //передается для расчета смещения столбцов. Это сумма номеров столбцов Y-типа в DESIRED_DATA_ARRAY: 0 + 0 + 3 + 5 + 9 + 9 + 3.
+                );
 
-            let sheet = match wrapped_sheet {
-                Ok(x) => x,
-                Err(err) => {
-                    if let Some(text) = ks2_etl::error_message(err, &sh_name) {
+                let sheet = match wrapped_sheet {
+                    Ok(x) => x,
+                    Err(err) => {
+                        if let Some(text) = ks2_etl::error_message(err, &sh_name) {
+                            let _ = Term::stdout().clear_last_lines(1);
+                            println!("\n{}\n{}", red.apply_to("Возникла ошибка."), text);
+                            println!("\nФайл, вызывающий ошибку: {}", book.path.display());
+                            thread::sleep(Duration::from_secs(3));
+                            println!("\n\n\n\n");
+                            continue 'main_loop;
+                        };
+                        panic!()
+                    }
+                };
+
+                let wrapped_act = Act::new(sheet);
+                let act = match wrapped_act {
+                    Ok(x) => x,
+                    Err(err) => {
                         let _ = Term::stdout().clear_last_lines(1);
-                        println!("\n{}\n{}", red.apply_to("Возникла ошибка."), text);
+                        println!("\n{}\n{}", red.apply_to("Возникла ошибка."), err);
                         println!("\nФайл, вызывающий ошибку: {}", book.path.display());
                         thread::sleep(Duration::from_secs(3));
                         println!("\n\n\n\n");
                         continue 'main_loop;
-                    };
-                    panic!()
-                }
-            };
+                    }
+                };
+                temp_acts_vec.push(act);
+            }
+            temp_acts_vec
+        };
 
-            let wrapped_act = Act::new(sheet);
-            let act = match wrapped_act {
-                Ok(x) => x,
-                Err(err) => {
-                    let _ = Term::stdout().clear_last_lines(1);
-                    println!("\n{}\n{}", red.apply_to("Возникла ошибка."), err);
-                    println!("\nФайл, вызывающий ошибку: {}", book.path.display());
-                    thread::sleep(Duration::from_secs(3));
-                    println!("\n\n\n\n");
-                    continue 'main_loop;
-                }
-            };
-
+        for act in acts_vector.iter() {
             if let Err(err) = report.write(&act) {
                 let _ = Term::stdout().clear_last_lines(1);
                 println!("\n{}\n{}", red.apply_to("Возникла ошибка."), err);
-                println!("\nФайл, вызывающий ошибку: {}", book.path.display());
+                println!("\nФайл, вызывающий ошибку: {}", act.path);
                 thread::sleep(Duration::from_secs(3));
                 println!("\n\n\n\n");
                 continue 'main_loop;
             };
         }
+
         let files_counter = report.body_size;
+
         if report.end().unwrap().close().is_err() {
             let _ = Term::stdout().clear_last_lines(3);
             println!("\n{}", red.apply_to("Возникла ошибка."));
