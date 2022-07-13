@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
+use std::thread; // для засыпания на секунду-две при печати сообщений
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(PartialEq)]
@@ -188,7 +189,37 @@ impl<'a> Sheet {
     }
 }
 
-pub fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
+pub fn get_vector_of_books(path: PathBuf) -> Result<Vec<Result<Book, XlsxError>>, ErrDescription> {
+    let books_vec = match path.is_dir() {
+        true => {
+            let temp_res = directory_traversal(&path);
+            let books_vector_len = (temp_res.0).len();
+            if books_vector_len == 0 {
+                return Err(ErrDescription {
+                    name: ErrName::NoFilesInSpecifiedPath(path),
+                    description: None,
+                });
+            } else {
+                println!(
+                    "Обнаружено {} файлов с расширением \".xlsm\".",
+                    books_vector_len + temp_res.1 as usize
+                );
+                if temp_res.1 > 0 {
+                    println!("Из них {} помечены \"@\" для исключения.", temp_res.1);
+                } else {
+                    println!("Среди них нет файлов, помеченных как исключенные.");
+                }
+                println!("\nИдет обработка, ожидайте...");
+            }
+            Ok(temp_res.0)
+        }
+        false if path.is_file() => Ok(vec![Book::new(path)]),
+        _ => panic!("Введенный пользователем путь не является папкой или файлом"),
+    };
+    books_vec
+}
+
+fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
     let prefix = path.to_string_lossy().to_string();
     let is_excluded_file = |entry: &DirEntry| -> bool {
         entry

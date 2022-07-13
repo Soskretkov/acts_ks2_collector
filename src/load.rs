@@ -160,7 +160,7 @@ pub struct Report {
 }
 
 impl<'a> Report {
-    pub fn new(report_name: &str) -> Report {
+    pub fn new(report_name: &str, acts_vec: &Vec<Act>) -> Report {
         let wb = Workbook::new(&report_name);
         // Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
         // но если какой-то акт имеет 16, 18, 0 или, скажем, 40 строк в итогах, то нужна какая-то логика, чтобы соотнести эти 40 строк одного акта

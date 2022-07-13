@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 #[derive(Debug)]
 pub enum ErrName {
     ShiftedColumnsInHeader,
@@ -5,6 +6,7 @@ pub enum ErrName {
     CalamineSheetOfTheBookIsUndetectable,
     CalamineSheetOfTheBookIsUnreadable(calamine::XlsxError),
     Calamine,
+    NoFilesInSpecifiedPath(PathBuf),
 }
 
 #[derive(Debug)]
@@ -84,6 +86,14 @@ pub fn error_message(err: ErrDescription, sh_name: &str) -> Option<String> {
             name: ErrName::Calamine,
             ..
         } => None,
+
+        ErrDescription {
+            name: ErrName::NoFilesInSpecifiedPath(path),
+            ..
+        } => Some(format!(
+            "Нет файлов \".xlsm\" по указанному пути: {}",
+            path.display()
+        )),
     }
 }
 pub fn variant_eq<T>(first: &T, second: &T) -> bool {

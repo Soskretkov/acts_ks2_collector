@@ -6,7 +6,7 @@ mod extract;
 mod load;
 mod transform;
 mod ui;
-use crate::extract::{Book, Sheet, SEARCH_REFERENCE_POINTS};
+use crate::extract::{Sheet, SEARCH_REFERENCE_POINTS};
 use crate::load::Report;
 use crate::transform::Act;
 
@@ -27,43 +27,27 @@ fn main() {
             .trim_end_matches(".exe")
             .to_owned()
             + ".xlsx";
-        let mut report = Report::new(&report_name);
-
-        let _ = Term::stdout().clear_screen();
-        let (books_vector, _excluded_files_counter) = match path.is_dir() {
-            true => {
-                let temp_res = extract::directory_traversal(&path);
-                let books_vector_len = (temp_res.0).len();
-                if books_vector_len == 0 {
-                    println!(
-                        "Нет файлов \".xlsm\" по указанному пути: {}",
-                        path.display()
-                    );
-                    thread::sleep(Duration::from_secs(1));
-                    continue 'main_loop;
-                } else {
-                    println!(
-                        "Обнаружено {} файлов с расширением \".xlsm\".",
-                        books_vector_len + temp_res.1 as usize
-                    );
-                    if temp_res.1 > 0 {
-                        println!("Из них {} помечены \"@\" для исключения.", temp_res.1);
-                    } else {
-                        println!("Среди них нет файлов, помеченных как исключенные.");
-                    }
-                    println!("\nИдет обработка, ожидайте...");
-                }
-                temp_res
-            }
-            false if path.is_file() => (vec![Book::new(path)], 0_u32),
-            _ => panic!("Введенный пользователем путь не является папкой или файлом"),
-        };
 
         let cyan = Style::new().cyan();
         let red = Style::new().red();
-        let acts_vector = {
+        let _ = Term::stdout().clear_screen();
+
+        let books_vec = match extract::get_vector_of_books(path) {
+            Ok(vec) => vec,
+            Err(err) => {
+                if let Some(text) = ks2_etl::error_message(err, &sh_name) {
+                    let _ = Term::stdout().clear_last_lines(1);
+                    println!("\n{}\n{}\n", red.apply_to("Возникла ошибка."), text);
+                    thread::sleep(Duration::from_secs(2));
+                    continue 'main_loop;
+                };
+                panic!()
+            }
+        };
+
+        let acts_vec = {
             let mut temp_acts_vec = Vec::new();
-            for mut item in books_vector.into_iter() {
+            for mut item in books_vec.into_iter() {
                 let book = item.as_mut().unwrap();
                 let wrapped_sheet = Sheet::new(
                     book,
@@ -104,7 +88,9 @@ fn main() {
             temp_acts_vec
         };
 
-        for act in acts_vector.iter() {
+        let mut report = Report::new(&report_name, &acts_vec);
+
+        for act in acts_vec.iter() {
             if let Err(err) = report.write(&act) {
                 let _ = Term::stdout().clear_last_lines(1);
                 println!("\n{}\n{}", red.apply_to("Возникла ошибка."), err);
@@ -128,12 +114,6 @@ fn main() {
         let _ = Term::stdout().clear_last_lines(1);
         println!("{}", cyan.apply_to("Успешно выполнено."));
         println!("Собрано {} файла(ов).", files_counter);
-        // if excluded_files_counter > 0 {
-        //     println!(
-        //         "{} файла(ов) проигнорировано, поскольку они помечены \"@\" для исключения.",
-        //         excluded_files_counter
-        //     );
-        // }
         println!("\nСоздан файл \"{}\"", report_name);
         thread::sleep(Duration::from_secs(1));
         println!("\n\n");
