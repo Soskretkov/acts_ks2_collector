@@ -1,6 +1,7 @@
 use crate::transform::{Act, DataVariant, TotalsRow};
 use ks2_etl::variant_eq;
 use regex::Regex;
+use std::collections::HashMap;
 use xlsxwriter::{DateTime, Format, FormatAlignment, Workbook, Worksheet};
 
 #[derive(Debug)]
@@ -165,9 +166,9 @@ impl<'a> Report {
         // Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
         // но если какой-то акт имеет 16, 18, 0 или, скажем, 40 строк в итогах, то нужна какая-то логика, чтобы соотнести эти 40 строк одного акта
         // с 17 строками других актов. Нужно решение, как не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
-        // Данные делятся на ожидаемые (им порядок можно сразу задать) и случайные.
-        // Ниже массив, содержащий информацию о колонках, которые мы ожидаем получить из актов, здесь будем задавать порядок.
-        // Позиция в массиве будет соответсвовать столбцу выходной формы (это крайние левые столбцы шапки):
+        // Данные в итогах можно условно разделить на ожидаемые (и при желани им порядок можно задать в векторе ниже) и случайные.
+        // Ниже вектор, содержащий информацию о колонках, которые мы ожидаем получить из актов, здесь будем задавать порядок.
+        // Позиция в векторе будет соответсвовать столбцу выходной формы (это крайние левые столбцы шапки):
 
         #[rustfmt::skip]
         let main_list: Vec<OutputData> = vec![
@@ -214,6 +215,40 @@ impl<'a> Report {
             skip_row: 1,
             body_size: 0,
         }
+    }
+    fn retrieve_info_about_totals(acts_vec: &Vec<Act>) {
+        // let mut res = Vec::<(&str, Option<&usize>, usize)>::new();
+        let mut hash = HashMap::<&str, (usize, usize)>::new();
+        let mut name: &str;
+        let mut max_row: usize;
+        let mut quantity: usize;
+
+        for act in acts_vec.iter() {
+            for totalsrow in &act.data_of_totals {
+                name = &totalsrow.name;
+                max_row = totalsrow.row_number.iter().max().unwrap_or(&0).clone() - act.start_row_of_totals;
+                quantity = totalsrow.row_number.len();
+
+                let entry = hash.get_mut(name);
+
+                match entry {
+                    Some((one, two)) => {
+                        if max_row > *one {
+                            *one = max_row;
+                        }
+                        if quantity > *two {
+                            *two = quantity;
+                        }
+                    }
+                    None => {
+                        hash.insert(name, (max_row, quantity));
+                    }
+                }
+                // let (m_row, quant) = hash.entry(name).or_insert((max_row, quantity));
+            }
+        }
+        let vec: Vec<(&str, usize, usize)> =
+            hash.into_iter().map(|x| (x.0, x.1 .0, x.1 .1)).collect();
     }
 
     pub fn write(&mut self, act: &'a Act) -> Result<(), String> {
