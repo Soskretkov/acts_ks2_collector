@@ -1,4 +1,5 @@
 use crate::transform::{Act, DataVariant, TotalsRow};
+use itertools::Itertools;
 use ks2_etl::variant_eq;
 use regex::Regex;
 use std::collections::HashMap;
@@ -10,6 +11,12 @@ pub struct OutputData {
     pub moving: Moving,
     pub expected_columns: u16,
     pub source: Source,
+}
+#[derive(Debug)]
+pub struct ShortOutputData<'b> {
+    pub name: &'b str,
+    pub expected_columns: u16,
+    pub sequence_number: usize,
 }
 #[derive(Debug, Clone, PartialEq)]
 
@@ -207,6 +214,7 @@ impl<'a> Report {
 
         let part_main = PrintPart::new(main_list).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
 
+        println!("{:#?}", Self::retrieve_info_about_totals(acts_vec));
         Report {
             book: wb,
             part_main,
@@ -216,39 +224,49 @@ impl<'a> Report {
             body_size: 0,
         }
     }
-    fn retrieve_info_about_totals(acts_vec: &Vec<Act>) {
-        // let mut res = Vec::<(&str, Option<&usize>, usize)>::new();
+    fn retrieve_info_about_totals(acts_vec: &Vec<Act>) -> Vec<ShortOutputData> {
         let mut hash = HashMap::<&str, (usize, usize)>::new();
         let mut name: &str;
-        let mut max_row: usize;
-        let mut quantity: usize;
+        let mut sequence_number: usize;
+        let mut expected_columns: usize;
 
         for act in acts_vec.iter() {
             for totalsrow in &act.data_of_totals {
                 name = &totalsrow.name;
-                max_row = totalsrow.row_number.iter().max().unwrap_or(&0).clone() - act.start_row_of_totals;
-                quantity = totalsrow.row_number.len();
+                sequence_number =
+                    totalsrow.row_number.iter().max().unwrap() - &act.start_row_of_totals;
+                expected_columns = totalsrow.row_number.len();
 
                 let entry = hash.get_mut(name);
 
                 match entry {
                     Some((one, two)) => {
-                        if max_row > *one {
-                            *one = max_row;
+                        if sequence_number > *one {
+                            *one = sequence_number;
                         }
-                        if quantity > *two {
-                            *two = quantity;
+                        if expected_columns > *two {
+                            *two = expected_columns;
                         }
                     }
                     None => {
-                        hash.insert(name, (max_row, quantity));
+                        hash.insert(name, (sequence_number, expected_columns));
                     }
                 }
-                // let (m_row, quant) = hash.entry(name).or_insert((max_row, quantity));
             }
         }
-        let vec: Vec<(&str, usize, usize)> =
-            hash.into_iter().map(|x| (x.0, x.1 .0, x.1 .1)).collect();
+
+        let vec: Vec<ShortOutputData> = hash
+            .into_iter()
+            .map(|x| ShortOutputData {
+                name: x.0,
+                sequence_number: x.1 .0,
+                expected_columns: x.1 .1 as u16,
+            })
+            .sorted_by_key(|x| x.name)
+            .sorted_by_key(|x| x.sequence_number)
+            .collect();
+
+        vec
     }
 
     pub fn write(&mut self, act: &'a Act) -> Result<(), String> {
