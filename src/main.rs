@@ -15,9 +15,9 @@ fn main() {
     ui::show_first_lines();
     ui::show_help();
     'main_loop: loop {
-        // let (path, sh_name) = ui::user_input();
-        let sh_name = "Лист1".to_owned();
-        let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
+        let (path, sh_name) = ui::user_input();
+        // let sh_name = "Лист1".to_owned();
+        // let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
 
         let sh_name_lowercase = sh_name.to_lowercase();
         let report_name = env::args()
