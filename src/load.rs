@@ -509,10 +509,10 @@ impl<'a> Report {
                 let datavariant = &act.data_of_header[index];
 
                 if let Some(DataVariant::String(text)) = datavariant {
-                    if text.matches(['/']).count() == 3 {
-                       let text = &text.chars().take_while(|ch| *ch != '/').collect::<String>();
+                    // if text.matches(['/']).count() == 3 {
+                    //    let text = &text.chars().take_while(|ch| *ch != '/').collect::<String>();
                        write_string(&mut sh, row, column, text, None)?;
-                    }
+                    // }
                 }
             }
             "По смете в ц.2000г." | "Выполнение работ в ц.2000г." => {

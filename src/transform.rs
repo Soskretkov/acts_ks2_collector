@@ -28,14 +28,18 @@ impl Act {
             })
             .collect();
 
-        let (start_row_of_totals, start_col_of_totals) = *sheet
+        let (start_row_of_totals_in_range, start_col_of_totals_in_range) = *sheet
             .search_points
             .get("стоимость материальных ресурсов (всего)")
             .unwrap(); //unwrap не требует обработки
 
-        let data_of_totals =
-            Self::get_totals(&sheet, (start_row_of_totals, start_col_of_totals)).unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
+        let data_of_totals = Self::get_totals(
+            &sheet,
+            (start_row_of_totals_in_range, start_col_of_totals_in_range),
+        )
+        .unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
 
+        let start_row_of_totals = start_row_of_totals_in_range + sheet.range_start.0 + 1;
         Ok(Act {
             path: sheet.path.to_string_lossy().to_string(),
             sheetname: sheet.sheet_name,

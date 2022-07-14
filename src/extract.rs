@@ -170,7 +170,6 @@ impl<'a> Sheet {
                 description: None,
             });
         }
-
         let range_start_u32 = data.start().ok_or(ErrDescription {
             name: ErrName::CalamineSheetOfTheBookIsUndetectable,
             description: None,
