@@ -9,6 +9,7 @@ use xlsxwriter::{DateTime, Format, FormatAlignment, Workbook, Worksheet};
 pub struct OutputData {
     pub rename: Option<&'static str>,
     pub moving: Moving,
+    pub sequence_number: usize,
     pub expected_columns: u16,
     pub source: Source,
 }
@@ -47,13 +48,13 @@ pub struct PrintPart {
     number_of_columns: u16,
 }
 impl PrintPart {
-    pub fn new(vector: Vec<OutputData>) -> Option<PrintPart> {
+    pub fn new(vector: Vec<OutputData>) -> PrintPart {
         let number_of_columns = Self::count_col(&vector);
 
-        Some(PrintPart {
+        PrintPart {
             vector,
             number_of_columns,
-        })
+        }
     }
     pub fn get_number_of_columns(&self) -> u16 {
         self.number_of_columns
@@ -133,14 +134,14 @@ impl PrintPart {
 fn PrintPart_test() {
     #[rustfmt::skip]
         let vec_to_test = vec![
-            OutputData{rename: None,                           moving: Moving::No,  expected_columns: 1,  source: Source::InTableHeader("Объект")},
-            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 2,  source: Source::AtBasePrices("Накладные расходы".to_string(), Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 3,  source: Source::AtBasePrices("Эксплуатация машин".to_string(), Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 4,  source: Source::AtCurrPrices("Накладные расходы".to_string(), Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 5,  source: Source::AtCurrPrices("Накладные".to_string(), Matches::Contains)},
-            OutputData{rename: Some("РЕНЕЙМ................"), moving: Moving::No,  expected_columns: 6,  source: Source::AtCurrPrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
-            OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::Del, expected_columns: 99, source: Source::AtBasePrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, expected_columns: 8,  source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)".to_string(), Matches::Exact)},
+            OutputData{rename: None,                           moving: Moving::No,  sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Объект")},
+            OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 2,  source: Source::AtBasePrices("Накладные расходы".to_string(), Matches::Exact)},
+            OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 3,  source: Source::AtBasePrices("Эксплуатация машин".to_string(), Matches::Exact)},
+            OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 4,  source: Source::AtCurrPrices("Накладные расходы".to_string(), Matches::Exact)},
+            OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 5,  source: Source::AtCurrPrices("Накладные".to_string(), Matches::Contains)},
+            OutputData{rename: Some("РЕНЕЙМ................"), moving: Moving::No,  sequence_number: 0, expected_columns: 6,  source: Source::AtCurrPrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
+            OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::Del, sequence_number: 0, expected_columns: 99, source: Source::AtBasePrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
+            OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 8,  source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)".to_string(), Matches::Exact)},
         ];
     let printpart = PrintPart::new(vec_to_test).unwrap();
 
@@ -161,70 +162,72 @@ fn PrintPart_test() {
 pub struct Report {
     pub book: xlsxwriter::Workbook,
     pub part_main: PrintPart,
-    pub part_base: Option<PrintPart>,
-    pub part_curr: Option<PrintPart>,
+    pub part_base: PrintPart,
+    pub part_curr: PrintPart,
     pub skip_row: u32,
     pub body_size: u32,
 }
 
 impl<'a> Report {
-    pub fn new(report_name: &str, acts_vec: &Vec<Act>) -> Report {
-        let wb = Workbook::new(&report_name);
-        // Нужно чтобы код назначал длину таблицы по горизонтали в зависимости от количества строк в итогах (обычно итоги имеют 17 строк,
-        // но если какой-то акт имеет 16, 18, 0 или, скажем, 40 строк в итогах, то нужна какая-то логика, чтобы соотнести эти 40 строк одного акта
-        // с 17 строками других актов. Нужно решение, как не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
-        // Данные в итогах можно условно разделить на ожидаемые (и при желани им порядок можно задать в векторе ниже) и случайные.
-        // Ниже вектор, содержащий информацию о колонках, которые мы ожидаем получить из актов, здесь будем задавать порядок.
-        // Позиция в векторе будет соответсвовать столбцу выходной формы (это крайние левые столбцы шапки):
+    pub fn new(report_name: &str, acts_vec: &[Act]) -> Report {
+        let wb = Workbook::new(report_name);
 
         #[rustfmt::skip]
         let main_list: Vec<OutputData> = vec![
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Папка (ссылка)")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Файл (ссылка)")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Акт №")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Акт дата")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Исполнитель")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Глава")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Объект")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Договор №")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Договор дата")},
-            // OutputData{rename: None,                                            moving: Moving::Yes,   expected_columns: 1, source: Source::AtBasePrices("Стоимость материальных ресурсов (всего)", Matches::Exact)},
-            // OutputData{rename: Some("Восстание машин"),                         moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин", Matches::Exact)},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Смета №")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Смета наименование")},
-            OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::No, expected_columns: 1,  source: Source::Calculate("По смете в ц.2000г.")},
-            OutputData{rename: Some("Выполнение работ в ц.2000г., руб."),   moving: Moving::No, expected_columns: 1,  source: Source::Calculate("Выполнение работ в ц.2000г.")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Отчетный период начало")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Отчетный период окончание")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Метод расчета")},
-            OutputData{rename: None,                                        moving: Moving::No, expected_columns: 1,  source: Source::InTableHeader("Затраты труда, чел.-час")},
-            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Всего с НР и СП (тек".to_string(), Matches::Contains)},
-            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtCurrPrices("Всего с НР и СП (баз".to_string(), Matches::Contains)},
-            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1".to_string(), Matches::Exact)},
-            OutputData{rename: None,                                        moving: Moving::Del, expected_columns: 1, source: Source::AtCurrPrices("Итого с К = 1".to_string(), Matches::Exact)},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Папка (ссылка)")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Файл (ссылка)")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Акт №")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Акт дата")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Исполнитель")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Глава")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Объект")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Договор №")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Договор дата")},
+            // OutputData{rename: None,                                            moving: Moving::Yes,   sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Стоимость материальных ресурсов (всего)", Matches::Exact)},
+            // OutputData{rename: Some("Восстание машин"),                         moving: Moving::No, sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин", Matches::Exact)},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Смета №")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Смета наименование")},
+            OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("По смете в ц.2000г.")},
+            OutputData{rename: Some("Выполнение работ в ц.2000г., руб."),   moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Выполнение работ в ц.2000г.")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Отчетный период начало")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Отчетный период окончание")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Метод расчета")},
+            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Затраты труда, чел.-час")},
+            OutputData{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Всего с НР и СП (тек".to_string(), Matches::Contains)},
+            OutputData{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtCurrPrices("Всего с НР и СП (баз".to_string(), Matches::Contains)},
+            OutputData{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1".to_string(), Matches::Exact)},
+            OutputData{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtCurrPrices("Итого с К = 1".to_string(), Matches::Exact)},
             // OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
             // OutputData{rename: None,                                            moving: Moving::Yes, expected_columns: 1, source: Source::AtBasePrices("ы", Matches::Contains)},
         ];
         // В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
-        // В PART_1 мы перечислили, то чему хотели задать порядок заранее, но есть столбцы, где мы хотим оставить порядок, который существует в актах.
-        // Чтобы продолжить, поделим отсутсвующие столбцы на два вида: соответсвующие форме акта, заданного в качестве шаблона, и те, которые в его форму не вписались.
-        // Столбцы, которые будут совпадать со структурой шаблонного акта, получат приоритет и будут стремится в левое положение таблицы выстраиваясь в том же порядке что и в шаблоне.
-        // Другими словами, структура нашего отчета воспроизведет в столбцах порядок итогов из шаблонного акта. Все что не вписальось в эту структуру будет размещено в крайних правых столбцах Excel.
-        // В итогах присутсвует два вида данных: базовые и текущие цены, таким образом получается отчет будет написан из 3 частей.
+        // Думайте об этой структуре как о настроечной таблице, или даже центре управления: захотим удалим, захотим переименуем, переставим местами с ее помощью.
+        // Позиция в векторе соответсвует позиции столбца в выходной форме (первая строка вектора будет первым столбцом в Excel от левого края).
+        // Однако, в итогах акта будут встречаться столбцы, порядок чередования которых останется тот, который существует в актах.
+        // Для excel-отчета потребуется три источника: шапка акта и два вида данных в его итогах: базовые и текущие цены.
+        // Отчет будет написан из этих 3 частей: part_main, part_base, part_curr
+        // Размер Excel-таблицы по горизонтали зависит от количества строк в итогах актов (допустим, обычно итоги имеют 17 строк,
+        // но навреняка найдется такой акт, который имеет 16, 18, 0 или, скажем, 40 строк в итогах. Потребуется какая-то логика, чтобы соотнести 40 строк одного акта
+        // с 17 строками других актов. Одна из задач: не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
 
-        let part_main = PrintPart::new(main_list).unwrap(); //unwrap не требует обработки: нет идей как это обрабатывать
+        let part_main = PrintPart::new(main_list);
 
-        println!("{:#?}", Self::retrieve_info_about_totals(acts_vec));
+        let sh_outpdata_vec = Self::retrieve_info_about_totals(acts_vec);
+        let (vec_base, vec_curr) = Self::other_parts(&part_main.vector, sh_outpdata_vec);
+        let part_base = PrintPart::new(vec_base);
+        let part_curr = PrintPart::new(vec_curr);
+
         Report {
             book: wb,
             part_main,
-            part_base: None,
-            part_curr: None,
+            part_base,
+            part_curr,
             skip_row: 1,
             body_size: 0,
         }
     }
-    fn retrieve_info_about_totals(acts_vec: &Vec<Act>) -> Vec<ShortOutputData> {
+
+    fn retrieve_info_about_totals(acts_vec: &[Act]) -> Vec<ShortOutputData> {
         let mut hash = HashMap::<&str, (usize, usize)>::new();
         let mut name: &str;
         let mut sequence_number: usize;
@@ -234,7 +237,7 @@ impl<'a> Report {
             for totalsrow in &act.data_of_totals {
                 name = &totalsrow.name;
                 sequence_number =
-                    totalsrow.row_number.iter().max().unwrap() - &act.start_row_of_totals;
+                    totalsrow.row_number.iter().max().unwrap() - act.start_row_of_totals;
                 expected_columns = totalsrow.row_number.len();
 
                 let entry = hash.get_mut(name);
@@ -269,15 +272,127 @@ impl<'a> Report {
         vec
     }
 
-    pub fn write(&mut self, act: &'a Act) -> Result<(), String> {
-        if self.part_base.is_none() && self.part_curr.is_none() {
-            let (vec_base, vec_curr) = Self::other_print_parts(act, &self.part_main.vector);
-            let part_base = PrintPart::new(vec_base);
-            let part_curr = PrintPart::new(vec_curr);
+    fn other_parts(
+        part_1: &[OutputData],
+        sh_outpdata_vec: Vec<ShortOutputData>,
+    ) -> (Vec<OutputData>, Vec<OutputData>) {
+        let exclude_from_base = part_1
+            .iter()
+            .filter(|outputdata| matches!(outputdata.source, Source::AtBasePrices(_, _)))
+            .collect::<Vec<_>>();
 
-            self.part_base = part_base;
-            self.part_curr = part_curr;
-        }
+        let exclude_from_curr = part_1
+            .iter()
+            .filter(|outputdata| matches!(outputdata.source, Source::AtCurrPrices(_, _)))
+            .collect::<Vec<_>>();
+
+        let get_outputdata = |exclude: &[&OutputData],
+                              sh_outpdata: &ShortOutputData,
+                              kind: &str|
+         -> Option<OutputData> {
+            let name = sh_outpdata.name;
+
+            let mut not_listed = true;
+            let mut required = false;
+            let mut rename = None;
+            let matches = Matches::Exact;
+
+            for item in exclude.iter() {
+                match item {
+                    OutputData {
+                        rename: set_name,
+                        moving: mov,
+                        source:
+                            Source::AtBasePrices(text, Matches::Exact)
+                            | Source::AtCurrPrices(text, Matches::Exact),
+                        ..
+                    } if text == name => {
+                        not_listed = false;
+                        if mov == &Moving::No {
+                            required = true;
+                            rename = *set_name;
+
+                            // println!(
+                            //     "other_print_parts: разрешил '{}' по точному совпадению имени, список досматриваться не будет",
+                            //     name
+                            // );
+                        }
+                        break;
+                    }
+                    OutputData {
+                        rename: set_name,
+                        moving: mov,
+                        source:
+                            Source::AtBasePrices(text, Matches::Contains)
+                            | Source::AtCurrPrices(text, Matches::Contains),
+                        ..
+                    } if name.contains(text) => {
+                        not_listed = false;
+                        if mov == &Moving::No {
+                            required = true;
+                            rename = *set_name;
+
+                            // println!(
+                            //     "other_print_parts: разрешил '{}' по НЕточному совпадению имени, список досматриваться не будет",
+                            //     name
+                            // );
+                        }
+                        break;
+                    }
+                    _ => (),
+                }
+            }
+
+            if required || not_listed {
+                let moving = Moving::No;
+                let sequence_number = sh_outpdata.sequence_number;
+                let expected_columns = sh_outpdata.expected_columns;
+
+                let source = match kind {
+                    "base" => Source::AtBasePrices(sh_outpdata.name.to_string(), matches),
+                    "curr" => Source::AtCurrPrices(sh_outpdata.name.to_string(), matches),
+                    _ => {
+                        unreachable!("операция не над итоговыми строками акта")
+                    }
+                };
+
+                let outputdata = OutputData {
+                    rename,
+                    moving,
+                    sequence_number,
+                    expected_columns,
+                    source,
+                };
+
+                return Some(outputdata);
+            }
+            None
+        };
+
+        let (part_base, part_curr) = sh_outpdata_vec.into_iter().fold(
+            (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
+            |mut acc, sh_outpdata| {
+                if let Some(x) = get_outputdata(&exclude_from_base, &sh_outpdata, "base") {
+                    acc.0.push(x)
+                };
+
+                if let Some(y) = get_outputdata(&exclude_from_curr, &sh_outpdata, "curr") {
+                    acc.1.push(y)
+                };
+                acc
+            },
+        );
+        (part_base, part_curr)
+    }
+    pub fn write(&mut self, act: &'a Act) -> Result<(), String> {
+        // if self.part_base.is_none() && self.part_curr.is_none() {
+        //     let (vec_base, vec_curr) = Self::other_print_parts(act, &self.part_main.vector);
+        //     let part_base = PrintPart::new(vec_base);
+        //     let part_curr = PrintPart::new(vec_curr);
+
+        //     self.part_base = part_base;
+        //     self.part_curr = part_curr;
+        // }
 
         Self::write_header(self, act)?;
         for totalsrow in act.data_of_totals.iter() {
@@ -443,8 +558,8 @@ impl<'a> Report {
         let mut sh = wrapped_sheet.unwrap(); //_or(
 
         let part_main = &self.part_main;
-        let part_base = self.part_base.as_ref().unwrap();
-        let part_curr = self.part_curr.as_ref().unwrap();
+        let part_base = &self.part_base;
+        let part_curr = &self.part_curr;
         let row = self.skip_row + self.body_size + 1;
 
         let get_part = |kind: &str, name: &str| {
@@ -525,122 +640,123 @@ impl<'a> Report {
         Ok(())
     }
 
-    fn other_print_parts(
-        sample: &'a Act,
-        part_1: &[OutputData],
-    ) -> (Vec<OutputData>, Vec<OutputData>) {
-        let exclude_from_base = part_1
-            .iter()
-            .filter(|outputdata| matches!(outputdata.source, Source::AtBasePrices(_, _)))
-            .collect::<Vec<_>>();
+    // fn other_print_parts(
+    //     sample: &'a Act,
+    //     part_1: &[OutputData],
+    // ) -> (Vec<OutputData>, Vec<OutputData>) {
+    //     let exclude_from_base = part_1
+    //         .iter()
+    //         .filter(|outputdata| matches!(outputdata.source, Source::AtBasePrices(_, _)))
+    //         .collect::<Vec<_>>();
 
-        let exclude_from_curr = part_1
-            .iter()
-            .filter(|outputdata| matches!(outputdata.source, Source::AtCurrPrices(_, _)))
-            .collect::<Vec<_>>();
+    //     let exclude_from_curr = part_1
+    //         .iter()
+    //         .filter(|outputdata| matches!(outputdata.source, Source::AtCurrPrices(_, _)))
+    //         .collect::<Vec<_>>();
 
-        let get_outputdata = |exclude: &[&OutputData],
-                              totalsrow: &'a TotalsRow,
-                              kind: &str|
-         -> Option<OutputData> {
-            let name = &totalsrow.name;
+    //     let get_outputdata = |exclude: &[&OutputData],
+    //                           totalsrow: &'a TotalsRow,
+    //                           kind: &str|
+    //      -> Option<OutputData> {
+    //         let name = &totalsrow.name;
 
-            let mut not_listed = true;
-            let mut required = false;
-            let mut rename = None;
-            let matches = Matches::Exact;
+    //         let mut not_listed = true;
+    //         let mut required = false;
+    //         let mut rename = None;
+    //         let matches = Matches::Exact;
 
-            for item in exclude.iter() {
-                match item {
-                    OutputData {
-                        rename: set_name,
-                        moving: mov,
-                        source:
-                            Source::AtBasePrices(text, Matches::Exact)
-                            | Source::AtCurrPrices(text, Matches::Exact),
-                        ..
-                    } if text == name => {
-                        not_listed = false;
-                        if mov == &Moving::No {
-                            required = true;
-                            rename = *set_name;
+    //         for item in exclude.iter() {
+    //             match item {
+    //                 OutputData {
+    //                     rename: set_name,
+    //                     moving: mov,
+    //                     source:
+    //                         Source::AtBasePrices(text, Matches::Exact)
+    //                         | Source::AtCurrPrices(text, Matches::Exact),
+    //                     ..
+    //                 } if text == name => {
+    //                     not_listed = false;
+    //                     if mov == &Moving::No {
+    //                         required = true;
+    //                         rename = *set_name;
 
-                            println!(
-                                "other_print_parts: разрешил '{}' по точному совпадению имени, список досматриваться не будет",
-                                name
-                            );
-                        }
-                        break;
-                    }
-                    OutputData {
-                        rename: set_name,
-                        moving: mov,
-                        source:
-                            Source::AtBasePrices(text, Matches::Contains)
-                            | Source::AtCurrPrices(text, Matches::Contains),
-                        ..
-                    } if name.contains(text) => {
-                        not_listed = false;
-                        if mov == &Moving::No {
-                            required = true;
-                            rename = *set_name;
+    //                         println!(
+    //                             "other_print_parts: разрешил '{}' по точному совпадению имени, список досматриваться не будет",
+    //                             name
+    //                         );
+    //                     }
+    //                     break;
+    //                 }
+    //                 OutputData {
+    //                     rename: set_name,
+    //                     moving: mov,
+    //                     source:
+    //                         Source::AtBasePrices(text, Matches::Contains)
+    //                         | Source::AtCurrPrices(text, Matches::Contains),
+    //                     ..
+    //                 } if name.contains(text) => {
+    //                     not_listed = false;
+    //                     if mov == &Moving::No {
+    //                         required = true;
+    //                         rename = *set_name;
 
-                            println!(
-                                "other_print_parts: разрешил '{}' по НЕточному совпадению имени, список досматриваться не будет",
-                                name
-                            );
-                        }
-                        break;
-                    }
-                    _ => (),
-                }
-            }
+    //                         println!(
+    //                             "other_print_parts: разрешил '{}' по НЕточному совпадению имени, список досматриваться не будет",
+    //                             name
+    //                         );
+    //                     }
+    //                     break;
+    //                 }
+    //                 _ => (),
+    //             }
+    //         }
 
-            if required || not_listed {
-                let moving = Moving::No;
-                let expected_columns = match kind {
-                    "base" => totalsrow.base_price.len() as u16,
-                    "curr" => totalsrow.curr_price.len() as u16,
-                    _ => {
-                        unreachable!("операция не над итоговыми строками акта")
-                    }
-                };
+    //         if required || not_listed {
+    //             let moving = Moving::No;
+    //             let expected_columns = match kind {
+    //                 "base" => totalsrow.base_price.len() as u16,
+    //                 "curr" => totalsrow.curr_price.len() as u16,
+    //                 _ => {
+    //                     unreachable!("операция не над итоговыми строками акта")
+    //                 }
+    //             };
 
-                let source = match kind {
-                    "base" => Source::AtBasePrices(totalsrow.name.clone(), matches),
-                    "curr" => Source::AtCurrPrices(totalsrow.name.clone(), matches),
-                    _ => {
-                        unreachable!("операция не над итоговыми строками акта")
-                    }
-                };
+    //             let source = match kind {
+    //                 "base" => Source::AtBasePrices(totalsrow.name.clone(), matches),
+    //                 "curr" => Source::AtCurrPrices(totalsrow.name.clone(), matches),
+    //                 _ => {
+    //                     unreachable!("операция не над итоговыми строками акта")
+    //                 }
+    //             };
 
-                let outputdata = OutputData {
-                    rename,
-                    moving,
-                    expected_columns,
-                    source,
-                };
+    //             let outputdata = OutputData {
+    //                 rename,
+    //                 moving,
+    //                 sequence_number: 0,
+    //                 expected_columns,
+    //                 source,
+    //             };
 
-                return Some(outputdata);
-            }
-            None
-        };
+    //             return Some(outputdata);
+    //         }
+    //         None
+    //     };
 
-        let (part_base, part_curr) = sample.data_of_totals.iter().fold(
-            (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
-            |mut acc, smpl_totalsrow| {
-                if let Some(x) = get_outputdata(&exclude_from_base, smpl_totalsrow, "base") {
-                    acc.0.push(x)
-                };
+    //     let (part_base, part_curr) = sample.data_of_totals.iter().fold(
+    //         (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
+    //         |mut acc, smpl_totalsrow| {
+    //             if let Some(x) = get_outputdata(&exclude_from_base, smpl_totalsrow, "base") {
+    //                 acc.0.push(x)
+    //             };
 
-                if let Some(y) = get_outputdata(&exclude_from_curr, smpl_totalsrow, "curr") {
-                    acc.1.push(y)
-                };
-                acc
-            },
-        );
-        (part_base, part_curr)
-    }
+    //             if let Some(y) = get_outputdata(&exclude_from_curr, smpl_totalsrow, "curr") {
+    //                 acc.1.push(y)
+    //             };
+    //             acc
+    //         },
+    //     );
+    //     (part_base, part_curr)
+    // }
 
     pub fn end(self) -> Result<Workbook, String> {
         let mut sh = self
@@ -658,8 +774,8 @@ impl<'a> Report {
                         && (matches!(outputdata.source, Source::AtBasePrices(_, _))
                             || matches!(outputdata.source, Source::AtCurrPrices(_, _))))
             })
-            .chain(self.part_base.as_ref().unwrap().vector.iter())
-            .chain(self.part_curr.as_ref().unwrap().vector.iter())
+            .chain(self.part_base.vector.iter())
+            .chain(self.part_curr.vector.iter())
             .collect();
 
         let header_row = self.skip_row;
@@ -724,8 +840,7 @@ impl<'a> Report {
 
             let name_in_formula_insertion_list = formula_insertion_list
                 .iter()
-                .find(|item| item.1 == name)
-                .is_some();
+                .any(|item| item.1 == name);
 
             let new_name = if let Some(x) = prefix {
                 x.to_owned() + " " + &renaming_name
@@ -761,8 +876,8 @@ impl<'a> Report {
 
         let last_row = self.skip_row + self.body_size;
         let last_col = self.part_main.get_number_of_columns()
-            + self.part_base.as_ref().unwrap().get_number_of_columns()
-            + self.part_curr.as_ref().unwrap().get_number_of_columns()
+            + self.part_base.get_number_of_columns()
+            + self.part_curr.get_number_of_columns()
             - 1;
 
         let first_row_tab_body = header_row + 1;

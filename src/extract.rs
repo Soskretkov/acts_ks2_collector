@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
-use std::thread; // для засыпания на секунду-две при печати сообщений
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(PartialEq)]
@@ -209,7 +208,7 @@ pub fn get_vector_of_books(path: PathBuf) -> Result<Vec<Result<Book, XlsxError>>
                 } else {
                     println!("Среди них нет файлов, помеченных как исключенные.");
                 }
-                println!("\nИдет обработка, ожидайте...");
+                println!("\nИдет отбор нужных файлов, ожидайте...");
             }
             Ok(temp_res.0)
         }

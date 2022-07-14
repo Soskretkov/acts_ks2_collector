@@ -15,9 +15,9 @@ fn main() {
     ui::show_first_lines();
     ui::show_help();
     'main_loop: loop {
-        // let (path, sh_name) = ui::user_input();
-        let sh_name = "Лист1".to_owned();
-        let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
+        let (path, sh_name) = ui::user_input();
+        // let sh_name = "Лист1".to_owned();
+        // let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
 
         let sh_name_lowercase = sh_name.to_lowercase();
 
@@ -87,16 +87,23 @@ fn main() {
             }
             temp_acts_vec
         };
-// "При создании Report требуется передать вектор актов. Это связанно с тем, что xlsxwriter
-// не умеет вставлять столбцы и не может переносить то, что им же записано (он не умеет читать Excel),
-// что навязывает необходимость установить общее количество
-// столбцов, и их порядок до того как начнется запись актов. Получается, на протяжении работы программы в Report
-// акты передаются дважды: при создании формы отчета для создания выборки всех названий, что встречаются в итогах,
-// а второй раз акт в Report будет передан циклом записи."
+        // "При создании Report требуется передать вектор актов. Это связанно с тем, что xlsxwriter
+        // не умеет вставлять столбцы и не может переносить то, что им же записано (он не умеет читать Excel),
+        // что навязывает необходимость установить общее количество
+        // столбцов, и их порядок до того как начнется запись актов. Получается, на протяжении работы программы в Report
+        // акты передаются дважды: при создании формы отчета для создания выборки всех названий, что встречаются в итогах,
+        // а второй раз акт в Report будет передан циклом записи."
+        let _ = Term::stdout().clear_last_lines(1);
+        println!(
+            "Идет построение структуры excel в зависимости от содержания итогов актов, ожидайте..."
+        );
         let mut report = Report::new(&report_name, &acts_vec);
 
+        let _ = Term::stdout().clear_last_lines(1);
+        println!("Идет запись, ожидайте...");
+
         for act in acts_vec.iter() {
-            if let Err(err) = report.write(&act) {
+            if let Err(err) = report.write(act) {
                 let _ = Term::stdout().clear_last_lines(1);
                 println!("\n{}\n{}", red.apply_to("Возникла ошибка."), err);
                 println!("\nФайл, вызывающий ошибку: {}", act.path);
