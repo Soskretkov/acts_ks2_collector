@@ -20,7 +20,6 @@ fn main() {
         // let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
 
         let sh_name_lowercase = sh_name.to_lowercase();
-
         let report_name = env::args()
             .next()
             .unwrap()

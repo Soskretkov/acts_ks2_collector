@@ -200,7 +200,7 @@ pub fn get_vector_of_books(path: PathBuf) -> Result<Vec<Result<Book, XlsxError>>
                 });
             } else {
                 println!(
-                    " Обнаружено {} файлов с расширением \".xlsm\".",
+                    "\n Обнаружено {} файлов с расширением \".xlsm\".",
                     books_vector_len + temp_res.1 as usize
                 );
                 if temp_res.1 > 0 {
@@ -220,6 +220,8 @@ pub fn get_vector_of_books(path: PathBuf) -> Result<Vec<Result<Book, XlsxError>>
 
 fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
     let prefix = path.to_string_lossy().to_string();
+    let parent = path.parent().unwrap().to_string_lossy().to_string();
+
     let is_excluded_file = |entry: &DirEntry| -> bool {
         entry
             .path()
@@ -229,10 +231,7 @@ fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
             .contains('@')
     };
 
-    let mut books_vector = vec![];
-    let mut excluded_files_counter = 0_u32;
-
-    for entry in WalkDir::new(path)
+    let walkdir = WalkDir::new(path)
         .into_iter()
         .filter_map(|e| e.ok()) //будет молча пропускать каталоги, на доступ к которым у владельца запущенного процесса нет разрешения
         .filter(|e| {
@@ -240,14 +239,30 @@ fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
                 .to_str()
                 .map(|s| !s.starts_with('~') & s.ends_with(".xlsm"))
                 .unwrap_or(false)
-        })
-    {
+        });
+
+    let mut counter = 1;
+    let mut books_vector = vec![];
+    let mut excluded_files_counter = 0_u32;
+
+    for entry in walkdir {
         if is_excluded_file(&entry) {
             excluded_files_counter += 1;
             continue;
         }
+
+        let path_to_processed_file = entry
+            .path()
+            .strip_prefix(&parent)
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+
         let temp_book = Book::new(entry.into_path());
         books_vector.push(temp_book);
+
+        println!(" {}: {}", counter, path_to_processed_file);
+        counter += 1;
     }
     (books_vector, excluded_files_counter)
 }
