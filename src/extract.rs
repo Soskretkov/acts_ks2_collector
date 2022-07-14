@@ -1,8 +1,10 @@
-use ks2_etl::{ErrDescription, ErrName};
 use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
+use ks2_etl::{ErrDescription, ErrName};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
+use std::path::PathBuf;
+use walkdir::{DirEntry, WalkDir};
 
 #[derive(PartialEq)]
 pub enum Required {
@@ -11,7 +13,7 @@ pub enum Required {
 }
 
 // Маленькими буквами из-за того что, например, "Доп. соглашение" Excel переведет в "Доп. Соглашение" если встать в ячейку и нажать Enter. Перестраховка от сюрпризов
-pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 8] = [
+pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 10] = [
     (0, Required::N, "исполнитель"),
     (0, Required::Y, "стройка"),
     (0, Required::Y, "объект"),
@@ -19,6 +21,8 @@ pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 8] = [
     (9, Required::Y, "доп. соглашение"),
     (5, Required::Y, "номер документа"),
     (3, Required::Y, "наименование работ и затрат"),
+    (11, Required::N, "зтр всего чел.-час"),
+    (0, Required::N, "итого по акту:"),
     (3, Required::Y, "стоимость материальных ресурсов (всего)"),
 ];
 
@@ -28,7 +32,7 @@ pub struct DesiredData {
     pub offset: Option<(&'static str, (i8, i8))>,
 }
 #[rustfmt::skip]
-pub const DESIRED_DATA_ARRAY: [DesiredData; 15] = [
+pub const DESIRED_DATA_ARRAY: [DesiredData; 16] = [
     DesiredData{name:"Исполнитель",                  offset: None},
     DesiredData{name:"Глава",                        offset: None},
     DesiredData{name:"Глава наименование",           offset: None},
@@ -44,24 +48,22 @@ pub const DESIRED_DATA_ARRAY: [DesiredData; 15] = [
     DesiredData{name:"Отчетный период начало",       offset: Some(("номер документа",                (2, 5)))},
     DesiredData{name:"Отчетный период окончание",    offset: Some(("номер документа",                (2, 6)))},
     DesiredData{name:"Метод расчета",                offset: Some(("наименование работ и затрат",    (-1, -3)))},
+    DesiredData{name:"Затраты труда, чел.-час",      offset: None},
 ];
 pub struct Book {
-    pub path: String,
+    pub path: PathBuf,
     pub data: Xlsx<BufReader<File>>,
 }
 
 impl Book {
-    pub fn new(path: &str) -> Result<Self, XlsxError> {
+    pub fn new(path: PathBuf) -> Result<Self, XlsxError> {
         let data: Xlsx<_> = calamine::open_workbook(&path)?;
-        Ok(Book {
-            path: path.to_owned(),
-            data,
-        })
+        Ok(Book { path, data })
     }
 }
 
 pub struct Sheet {
-    pub path: String,
+    pub path: PathBuf,
     pub sheet_name: String,
     pub data: Range<DataType>,
     pub search_points: HashMap<&'static str, (usize, usize)>,
@@ -106,14 +108,14 @@ impl<'a> Sheet {
         let mut temp;
         for item in search_reference_points {
             match item.1 {
-                // Для Y-типов расходуемый итератор - тем самым достигается проверка по очередности вохождения слов по строкам
+                // Для Y-типов подходит расходуемый итератор - достигается проверка по очередности вохождения слов по строкам
                 // (т.е. "Стройку" мы ожидаем выше "Объекта, например")
                 Required::Y => {
                     temp = temp_sh_iter.find(|x| {
                         x.2.get_string().as_ref().unwrap_or(&"").to_lowercase() == item.2
                     });
                 }
-                // Для N-типов нельзя использовать расходуемые итераторы, так как необязательное значение будет отсутсвовать (и при его поиске израсходуется итератор)
+                // Для N-типов нельзя использовать расходуемые итераторы, так как необязательное значение может и отсутсвовать (и при его поиске израсходуется итератор)
                 Required::N => {
                     temp = data.used_cells().find(|x| {
                         x.2.get_string().as_ref().unwrap_or(&"").to_lowercase() == item.2
@@ -184,4 +186,68 @@ impl<'a> Sheet {
             range_start,
         })
     }
+}
+
+pub fn get_vector_of_books(path: PathBuf) -> Result<Vec<Result<Book, XlsxError>>, ErrDescription> {
+    let books_vec = match path.is_dir() {
+        true => {
+            let temp_res = directory_traversal(&path);
+            let books_vector_len = (temp_res.0).len();
+            if books_vector_len == 0 {
+                return Err(ErrDescription {
+                    name: ErrName::NoFilesInSpecifiedPath(path),
+                    description: None,
+                });
+            } else {
+                println!(
+                    " Обнаружено {} файлов с расширением \".xlsm\".",
+                    books_vector_len + temp_res.1 as usize
+                );
+                if temp_res.1 > 0 {
+                    println!(" Из них {} помечены \"@\" для исключения.", temp_res.1);
+                } else {
+                    println!(" Среди них нет файлов, помеченных как исключенные.");
+                }
+                println!("\n Идет отбор нужных файлов, ожидайте...");
+            }
+            Ok(temp_res.0)
+        }
+        false if path.is_file() => Ok(vec![Book::new(path)]),
+        _ => panic!(" Введенный пользователем путь не является папкой или файлом"),
+    };
+    books_vec
+}
+
+fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
+    let prefix = path.to_string_lossy().to_string();
+    let is_excluded_file = |entry: &DirEntry| -> bool {
+        entry
+            .path()
+            .strip_prefix(&prefix)
+            .unwrap()
+            .to_string_lossy()
+            .contains('@')
+    };
+
+    let mut books_vector = vec![];
+    let mut excluded_files_counter = 0_u32;
+
+    for entry in WalkDir::new(path)
+        .into_iter()
+        .filter_map(|e| e.ok()) //будет молча пропускать каталоги, на доступ к которым у владельца запущенного процесса нет разрешения
+        .filter(|e| {
+            e.file_name()
+                .to_str()
+                .map(|s| !s.starts_with('~') & s.ends_with(".xlsm"))
+                .unwrap_or(false)
+        })
+    {
+        if is_excluded_file(&entry) {
+            excluded_files_counter += 1;
+            continue;
+        }
+        let temp_book = Book::new(entry.into_path());
+        books_vector.push(temp_book);
+    }
+    (books_vector, excluded_files_counter)
 }

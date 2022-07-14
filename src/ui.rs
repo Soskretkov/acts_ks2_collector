@@ -1,23 +1,29 @@
 use console::Term;
+use dialoguer::Input;
 use std::io;
-use std::thread;
-use std::time::Duration;
+use std::path::PathBuf;
+use std::thread; // для засыпания на секунду-две
+use std::time::Duration; // для засыпания на секунду-две // для очистки консоли перед выводом полезных сообщений
 
-pub fn session() -> (String, String) {
-    show_first_lines();
-    show_help();
-
+pub fn user_input() -> (PathBuf, String) {
     loop {
-        let path = inputting_path();
+        let entered_text = inputting_path();
+        let path = PathBuf::from(&entered_text);
 
-        if path.matches(['\\']).count() > 0 {
-            break (path, inputting_sheet_name());
+        if path.exists() {
+            break (path, entered_sheet_name());
         }
 
-        let len_path = path.chars().count();
+        //filter нужен на случай ввода "details"  в кавычках (@ - на случай русской раскладки)
+        let keyword = entered_text
+            .chars()
+            .filter(|ch| *ch != '"' && *ch != '@')
+            .collect::<String>()
+            .to_lowercase();
+        let len_text = keyword.chars().count();
 
-        match path {
-            x if len_path < 9
+        match keyword {
+            x if len_text < 9
                 && x.matches([
                     'd', 'e', 't', 'a', 'i', 'l', 's', 'в', 'у', 'е', 'ф', 'ш', 'д', 'ы',
                 ])
@@ -34,64 +40,41 @@ pub fn session() -> (String, String) {
 }
 
 fn inputting_path() -> String {
-    loop {
-        println!("Введите путь:");
-        let mut text = String::new();
-        io::stdin()
-            .read_line(&mut text)
-            .expect("Ошибка чтения ввода");
+    println!(" Введите путь:");
+    let mut text = String::new();
+    io::stdin()
+        .read_line(&mut text)
+        .expect(" Ошибка чтения ввода");
 
-        //filter нужен на случай ввода "details"  в кавычках (@ - на случай русской раскладки)
-        text = text
-            .trim()
-            .chars()
-            .filter(|ch| *ch != '"' && *ch != '@')
-            .collect::<String>()
-            // .trim_end_matches('\\')
-            .to_lowercase();
-
-        let len_text = text.chars().count();
-
-        if len_text < 3 {
-            continue;
-        }
-
-        break text;
-    }
+    text = text.trim().to_string();
+    text
 }
 
-fn inputting_sheet_name() -> String {
-    loop {
-        let _ = Term::stdout().clear_screen();
-        println!("Введите имя листа:");
-        thread::sleep(Duration::from_secs(1));
-        println!("Нет разницы, вводите ли вы «Лист1» или «лист1» - способ указания листа не чувствителен к регистру.");
-        let mut temp_sh_name = String::new();
-
-        io::stdin()
-            .read_line(&mut temp_sh_name)
-            .expect("Ошибка чтения ввода");
-
-        temp_sh_name = temp_sh_name.trim().to_string();
-
-        let len_text = temp_sh_name.chars().count();
-
-        if len_text > 0 {
-            return temp_sh_name.to_lowercase();
-        }
-    }
+fn entered_sheet_name() -> String {
+    let _ = Term::stdout().clear_screen();
+    let temp_sh_name: String = Input::new()
+        .with_prompt(
+            r#" Подтвердите лист или укажите другой.
+ Не имеет значения, используете ли вы прописные или строчные буквы при указании листа.
+ Имя листа"#,
+        )
+        .with_initial_text("Лист1")
+        .interact()
+        .expect("Ошибка чтения ввода");
+    temp_sh_name
 }
 
-fn show_first_lines() {
+pub fn show_first_lines() {
     println!("        Введите  \"details\"  для получения подробностей о программе.\n");
 }
 #[rustfmt::skip]
-fn show_help() {
+pub fn show_help() {
     println!("------------------------------------------------------------------------------------------------------------\n");
-    println!("● Используйте CTRL + C, чтобы вставить скопированный путь к папке, из которой необходимо собрать данные;");
-    println!("● Программа будет собирать данные из файлов в указанной папке и всех вложенных папках;");
-    println!("● Собираются только файлы с расширением «.xlsm»;");
-    println!("● Полезный совет: переименуйте файл Excel, добавив символ «@», и программа не будет собирать его данные.");
+    println!(" ● Используйте CTRL + C, чтобы вставить скопированный путь к папке или файлу с данными, которые вы хотите собрать.");
+    println!(" ● Программа будет собирать данные из файлов Excel по указанному пути, включая вложенные папки.");
+    println!(" ● Собираются только файлы с расширением «.xlsm».");
+    println!(" ● Полезный совет:\n     - переименуйте файл Excel, добавив символ «@», и программа не будет собирать его данные;");
+    println!("     - переименуйте папку, добавив символ «@», и программа проигнорирует ее содержимое.");
     println!("\n------------------------------------------------------------------------------------------------------------\n");
 }
 #[rustfmt::skip]
@@ -103,7 +86,7 @@ fn show_details() {
 
     //println!("------------------------------------------------------------------------------------------------------------\n");
     println!("            Наименование продукта:        «Сборщик данных из актов формы \"КС-2\"»");
-    println!("            Версия продукта:              1.0.0");
+    println!("            Версия продукта:              {}", env!("CARGO_PKG_VERSION"));
     println!("            Дата основания проекта:       02.06.2022");
     println!("            Адрес на GitHub.com:          https://github.com/Soskretkov/ks2_etl");
     println!("            Автор:                        Оскретков Сергей Юрьевич\n");

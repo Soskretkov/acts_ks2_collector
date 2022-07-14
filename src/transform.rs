@@ -6,9 +6,10 @@ use std::collections::HashMap;
 pub struct Act {
     pub path: String,
     pub sheetname: String,
-    pub names_of_header: &'static [DesiredData; 15],
+    pub names_of_header: &'static [DesiredData; 16],
     pub data_of_header: Vec<Option<DataVariant>>,
     pub data_of_totals: Vec<TotalsRow>,
+    pub start_row_of_totals: usize,
 }
 
 impl Act {
@@ -27,14 +28,21 @@ impl Act {
             })
             .collect();
 
-        let data_of_totals = Self::raw_totals(&sheet).unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
+        let (start_row_of_totals, start_col_of_totals) = *sheet
+            .search_points
+            .get("стоимость материальных ресурсов (всего)")
+            .unwrap(); //unwrap не требует обработки
+
+        let data_of_totals =
+            Self::get_totals(&sheet, (start_row_of_totals, start_col_of_totals)).unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
 
         Ok(Act {
-            path: sheet.path,
+            path: sheet.path.to_string_lossy().to_string(),
             sheetname: sheet.sheet_name,
             names_of_header: &DESIRED_DATA_ARRAY,
             data_of_header,
             data_of_totals,
+            start_row_of_totals,
         })
     }
     fn cells_addreses_in_header(
@@ -50,7 +58,6 @@ impl Act {
         let temp_vec: Vec<Option<(usize, usize)>> = DESIRED_DATA_ARRAY.iter().fold(Vec::new(), |mut vec, shift| {
 
                 let temp_cells_address: Option<(usize, usize)> = match shift {
-                    // (_, Some((point_name, (row, col)))) => {
                     DesiredData{name: _, offset: Some((point_name, (row, col)))} => {
                         let temp = match *point_name {
                             "объект" => ((object_adr.0 as isize + *row as isize) as usize, (object_adr.1 as isize + *col as isize) as usize),
@@ -72,6 +79,16 @@ impl Act {
                             true => Some((stroika_adr.0 + 1, stroika_adr.1 + 3)),
                             false => None,
                         }
+                        "Затраты труда, чел.-час" => {
+                            let ttl = search_points.get("итого по акту:");
+                            let ztr = search_points.get("зтр всего чел.-час");
+
+                            if ztr.is_some() & ttl.is_some() {
+                                Some((ttl.unwrap().0, ztr.unwrap().1))
+                            } else {
+                                None
+                            }
+                        }
                         _ => None,
                     },
                 };
@@ -83,12 +100,11 @@ impl Act {
         temp_vec
     }
 
-    fn raw_totals(sheet: &Sheet) -> Result<Vec<TotalsRow>, String> {
-        let (starting_row, starting_col) = *sheet
-            .search_points
-            .get("стоимость материальных ресурсов (всего)")
-            .unwrap(); //unwrap не требует обработки
-
+    fn get_totals(
+        sheet: &Sheet,
+        first_row_address: (usize, usize),
+    ) -> Result<Vec<TotalsRow>, String> {
+        let (starting_row, starting_col) = first_row_address;
         let total_row = sheet.data.get_size().0;
         let base_col = starting_col + 6;
         let current_col = starting_col + 9;
