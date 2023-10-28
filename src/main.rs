@@ -2,9 +2,10 @@ use console::{Style, Term}; // для очистки консоли перед �
 use std::env;
 use std::thread; // для засыпания на секунду-две при печати сообщений
 use std::time::Duration; // для засыпания на секунду-две при печати сообщений // имя ".exe" будет присвоено файлу Excel
+mod error;
 mod extract;
-mod load;
-mod transform;
+mod load; // ?
+mod transform; // ?
 mod ui;
 use crate::extract::{Sheet, SEARCH_REFERENCE_POINTS};
 use crate::load::Report;
@@ -34,13 +35,14 @@ fn main() {
         let books_vec = match extract::get_vector_of_books(path) {
             Ok(vec) => vec,
             Err(err) => {
-                if let Some(text) = ks2_etl::error_message(err, &sh_name) {
-                    let _ = Term::stdout().clear_last_lines(1);
-                    println!("\n{}\n{}\n", red.apply_to(" Возникла ошибка."), text);
-                    thread::sleep(Duration::from_secs(2));
-                    continue 'main_loop;
-                };
-                panic!()
+                let _ = Term::stdout().clear_last_lines(1);
+                println!(
+                    "\n{}\n{}\n",
+                    red.apply_to(" Возникла ошибка."),
+                    err.to_string()
+                );
+                thread::sleep(Duration::from_secs(2));
+                continue 'main_loop;
             }
         };
 
@@ -58,15 +60,16 @@ fn main() {
                 let sheet = match wrapped_sheet {
                     Ok(x) => x,
                     Err(err) => {
-                        if let Some(text) = ks2_etl::error_message(err, &sh_name) {
-                            let _ = Term::stdout().clear_last_lines(1);
-                            println!("\n{}\n{}", red.apply_to(" Возникла ошибка."), text);
-                            println!("\n Файл, вызывающий ошибку: {}", book.path.display());
-                            thread::sleep(Duration::from_secs(3));
-                            println!("\n\n\n\n");
-                            continue 'main_loop;
-                        };
-                        panic!()
+                        let _ = Term::stdout().clear_last_lines(1);
+                        println!(
+                            "\n{}\n{}",
+                            red.apply_to(" Возникла ошибка."),
+                            err.to_string()
+                        );
+                        println!("\n Файл, вызывающий ошибку: {}", book.path.display());
+                        thread::sleep(Duration::from_secs(3));
+                        println!("\n\n\n\n");
+                        continue 'main_loop;
                     }
                 };
 

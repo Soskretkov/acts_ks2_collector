@@ -1,10 +1,12 @@
+use crate::error::Error;
 use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
-use ks2_etl::{ErrDescription, ErrName};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use walkdir::{DirEntry, WalkDir};
+
+const EXCEL_FILE_EXTENSION: &str = ".xlsm";
 
 #[derive(PartialEq)]
 pub enum Required {
@@ -13,6 +15,7 @@ pub enum Required {
 }
 
 // Маленькими буквами из-за того что, например, "Доп. соглашение" Excel переведет в "Доп. Соглашение" если встать в ячейку и нажать Enter. Перестраховка от сюрпризов
+// магические цифры в кортеже это смещение в столбцах от первого столбца в документе до столбца, содержащего указанный литерал
 pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 10] = [
     (0, Required::N, "исполнитель"),
     (0, Required::Y, "стройка"),
@@ -76,35 +79,35 @@ impl<'a> Sheet {
         user_entered_sh_name: &'a str,
         search_reference_points: &[(usize, Required, &'static str)],
         expected_sum_of_requir_col: usize,
-    ) -> Result<Sheet, ErrDescription> {
-        let sh_names = workbook.data.sheet_names();
-
-        let sheet_name = sh_names
+    ) -> Result<Sheet, Error<'a>> {
+        let sheet_name = workbook
+            .data
+            .sheet_names()
             .iter()
             .find(|name| name.to_lowercase() == user_entered_sh_name)
-            .ok_or(ErrDescription {
-                name: ErrName::CalamineSheetOfTheBookIsUndetectable,
-                description: Some(format!("{:?}", sh_names)),
+            .ok_or(Error::CalamineSheetOfTheBookIsUndetectable {
+                sh_name_for_search: user_entered_sh_name,
+                sh_names: workbook.data.sheet_names().to_owned(),
             })?
-            .to_owned();
+            .clone();
 
-        let data = workbook
+        let sheetXL = workbook
             .data
             .worksheet_range(&sheet_name)
-            .ok_or(ErrDescription {
-                name: ErrName::CalamineSheetOfTheBookIsUndetectable,
-                description: None,
+            .ok_or(Error::CalamineSheetOfTheBookIsUndetectable {
+                sh_name_for_search: user_entered_sh_name,
+                sh_names: workbook.data.sheet_names().to_owned(),
             })?
             .or_else(|error| {
-                Err(ErrDescription {
-                    name: ErrName::CalamineSheetOfTheBookIsUnreadable(error),
-                    description: None,
+                Err(Error::CalamineSheetOfTheBookIsUnreadable {
+                    sh_name: sheet_name.to_owned(),
+                    err: error,
                 })
             })?;
 
         let mut search_points = HashMap::new();
 
-        let mut temp_sh_iter = data.used_cells();
+        let mut temp_sh_iter = sheetXL.used_cells();
         let mut temp;
         for item in search_reference_points {
             match item.1 {
@@ -112,13 +115,21 @@ impl<'a> Sheet {
                 // (т.е. "Стройку" мы ожидаем выше "Объекта, например")
                 Required::Y => {
                     temp = temp_sh_iter.find(|x| {
-                        x.2.get_string().as_ref().unwrap_or(&"").to_lowercase() == item.2
+                        x.2.get_string()
+                            .as_ref()
+                            .unwrap_or_else(|| &"")
+                            .to_lowercase()
+                            == item.2
                     });
                 }
                 // Для N-типов нельзя использовать расходуемые итераторы, так как необязательное значение может и отсутсвовать (и при его поиске израсходуется итератор)
                 Required::N => {
-                    temp = data.used_cells().find(|x| {
-                        x.2.get_string().as_ref().unwrap_or(&"").to_lowercase() == item.2
+                    temp = sheetXL.used_cells().find(|x| {
+                        x.2.get_string()
+                            .as_ref()
+                            .unwrap_or_else(|| &"")
+                            .to_lowercase()
+                            == item.2
                     });
                 }
             }
@@ -136,15 +147,14 @@ impl<'a> Sheet {
             .unwrap_or_else(|| panic!("ложь: \"DESIRED_DATA_ARRAY всегда имеет значения\""))
             .2;
 
-        search_points.get(test).ok_or(ErrDescription {
-            name: ErrName::SheetNotContainAllNecessaryData,
-            description: None,
-        })?;
+        search_points
+            .get(test)
+            .ok_or(Error::SheetNotContainAllNecessaryData)?;
 
         // Проверка значений на удаленность столбцов, чтобы гарантировать что найден нужный лист.
         let first_col = search_points
             .get("стройка")
-            .unwrap_or_else(|| panic!("ложь: \"Всегда действительные имена для HashMap\""));
+            .unwrap_or_else(|| panic!("ложь: \"Необеспечены действительные имена HashMap\""));
 
         let (just_a_amount_requir_col, just_a_sum_requir_col) = search_reference_points
             .iter()
@@ -155,7 +165,7 @@ impl<'a> Sheet {
                         + search_points
                             .get(item.2)
                             .unwrap_or_else(|| {
-                                panic!("ложь: \"Всегда действительные имена для HashMap\"")
+                                panic!("ложь: \"Необеспечены действительные имена HashMap\"")
                             })
                             .1,
                 ),
@@ -165,41 +175,34 @@ impl<'a> Sheet {
         if let false = just_a_sum_requir_col - first_col.1 * just_a_amount_requir_col
             == expected_sum_of_requir_col
         {
-            return Err(ErrDescription {
-                name: ErrName::ShiftedColumnsInHeader,
-                description: None,
-            });
+            return Err(Error::ShiftedColumnsInHeader);
         }
-        let range_start_u32 = data.start().ok_or(ErrDescription {
-            name: ErrName::CalamineSheetOfTheBookIsUndetectable,
-            description: None,
-        })?;
+        let range_start_u32 = sheetXL
+            .start()
+            .ok_or(Error::EmptySheetRange(user_entered_sh_name))?;
 
         let range_start = (range_start_u32.0 as usize, range_start_u32.1 as usize);
 
         Ok(Sheet {
             path: workbook.path.clone(),
             sheet_name,
-            data,
+            data: sheetXL,
             search_points,
             range_start,
         })
     }
 }
 
-pub fn get_vector_of_books(path: PathBuf) -> Result<Vec<Result<Book, XlsxError>>, ErrDescription> {
+pub fn get_vector_of_books(path: PathBuf) -> Result<Vec<Result<Book, XlsxError>>, Error<'static>> {
     let books_vec = match path.is_dir() {
         true => {
             let temp_res = directory_traversal(&path);
             let books_vector_len = (temp_res.0).len();
             if books_vector_len == 0 {
-                return Err(ErrDescription {
-                    name: ErrName::NoFilesInSpecifiedPath(path),
-                    description: None,
-                });
+                return Err(Error::NoFilesInSpecifiedPath(path));
             } else {
                 println!(
-                    "\n Обнаружено {} файлов с расширением \".xlsm\".",
+                    "\n Обнаружено {} файлов с расширением \"{EXCEL_FILE_EXTENSION}\".",
                     books_vector_len + temp_res.1 as usize
                 );
                 if temp_res.1 > 0 {
@@ -236,8 +239,8 @@ fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
         .filter(|e| {
             e.file_name()
                 .to_str()
-                .map(|s| !s.starts_with('~') & s.ends_with(".xlsm"))
-                .unwrap_or(false)
+                .map(|s| !s.starts_with('~') & s.ends_with(EXCEL_FILE_EXTENSION))
+                .unwrap_or_else(|| false)
         });
 
     let mut counter = 1;

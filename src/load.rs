@@ -143,7 +143,7 @@ fn PrintPart_test() {
             OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::Del, sequence_number: 0, expected_columns: 99, source: Source::AtBasePrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
             OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 8,  source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)".to_string(), Matches::Exact)},
         ];
-    let printpart = PrintPart::new(vec_to_test).unwrap();
+    let printpart = PrintPart::new(vec_to_test);
 
     assert_eq!(&29, &printpart.get_number_of_columns());
     assert_eq!(
