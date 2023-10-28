@@ -1,6 +1,5 @@
 use crate::transform::{Act, DataVariant, TotalsRow};
 use itertools::Itertools;
-use ks2_etl::variant_eq;
 use regex::Regex;
 use std::collections::HashMap;
 use xlsxwriter::{DateTime, Format, FormatAlignment, Workbook, Worksheet};
@@ -86,13 +85,13 @@ impl PrintPart {
                 OutputData {
                     source: Source::Calculate(text) | Source::InTableHeader(text),
                     ..
-                } if ks2_etl::variant_eq(&outputdata.source, &src) && &name == text => {
+                } if variant_eq(&outputdata.source, &src) && &name == text => {
                     return Some((index, counter));
                 }
                 OutputData {
                     source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
                     ..
-                } if ks2_etl::variant_eq(&outputdata.source, &src)
+                } if variant_eq(&outputdata.source, &src)
                     && variant_eq(m, &matches)
                     && m == &Matches::Exact
                     && name == text =>
@@ -102,7 +101,7 @@ impl PrintPart {
                 OutputData {
                     source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
                     ..
-                } if ks2_etl::variant_eq(&outputdata.source, &src)
+                } if variant_eq(&outputdata.source, &src)
                     && variant_eq(m, &matches)
                     && m == &Matches::Contains
                     && name.contains(text) =>
@@ -1008,6 +1007,11 @@ fn column_written_with_letters(column: u16) -> String {
 
     column_written_with_letters(integer - 1) + &ch
 }
+
+fn variant_eq<T>(first: &T, second: &T) -> bool {
+    std::mem::discriminant(first) == std::mem::discriminant(second)
+}
+
 
 #[cfg(test)]
 mod tests {
