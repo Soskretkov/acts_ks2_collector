@@ -1,4 +1,3 @@
-use crate::config;
 use crate::error::Error;
 use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
 use std::collections::HashMap;
@@ -6,6 +5,8 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use walkdir::{DirEntry, WalkDir};
+
+const EXCEL_FILE_EXTENSION: &str = ".xlsm";
 
 #[derive(PartialEq)]
 pub enum Required {
@@ -207,7 +208,7 @@ pub fn get_vector_of_books(path: PathBuf) -> Result<Vec<Result<Book, XlsxError>>
                 let message = format!(
                     "\n Обнаружено {} файлов с расширением \"{}\".",
                     books_vector_len + temp_res.1 as usize,
-                    config::EXCEL_FILE_EXTENSION
+                    EXCEL_FILE_EXTENSION
                 );
                 println!("{}", message);
                 if temp_res.1 > 0 {
@@ -244,7 +245,7 @@ fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
         .filter(|e| {
             e.file_name()
                 .to_str()
-                .map(|s| !s.starts_with('~') & s.ends_with(config::EXCEL_FILE_EXTENSION))
+                .map(|s| !s.starts_with('~') & s.ends_with(EXCEL_FILE_EXTENSION))
                 .unwrap_or_else(|| false)
         });
 

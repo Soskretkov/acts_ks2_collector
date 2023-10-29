@@ -2,13 +2,12 @@ use console::{Style, Term}; // для очистки консоли перед �
 use std::env;
 use std::thread; // для засыпания на секунду-две при печати сообщений
 use std::time::Duration; // для засыпания на секунду-две при печати сообщений // имя ".exe" будет присвоено файлу Excel
-mod config;
 mod error;
 mod extract;
-mod load; // ?
-mod transform; // ?
+mod load;
+mod transform;
 mod ui;
-use crate::extract::{Sheet, SEARCH_REFERENCE_POINTS};
+use crate::extract::Sheet;
 use crate::load::Report;
 use crate::transform::Act;
 
@@ -27,7 +26,7 @@ fn main() {
             .unwrap()
             .trim_end_matches(".exe")
             .to_owned()
-            + config::EXCEL_FILE_EXTENSION;
+            + ".xlsx";
 
         let cyan = Style::new().cyan();
         let red = Style::new().red();
