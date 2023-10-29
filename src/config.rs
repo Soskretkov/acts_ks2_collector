@@ -1,0 +1,1 @@
+pub const EXCEL_FILE_EXTENSION: &str = ".xlsm";

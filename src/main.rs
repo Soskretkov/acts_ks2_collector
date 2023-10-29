@@ -2,6 +2,7 @@ use console::{Style, Term}; // для очистки консоли перед �
 use std::env;
 use std::thread; // для засыпания на секунду-две при печати сообщений
 use std::time::Duration; // для засыпания на секунду-две при печати сообщений // имя ".exe" будет присвоено файлу Excel
+mod config;
 mod error;
 mod extract;
 mod load; // ?
@@ -26,7 +27,7 @@ fn main() {
             .unwrap()
             .trim_end_matches(".exe")
             .to_owned()
-            + ".xlsx";
+            + config::EXCEL_FILE_EXTENSION;
 
         let cyan = Style::new().cyan();
         let red = Style::new().red();
@@ -53,7 +54,6 @@ fn main() {
                 let wrapped_sheet = Sheet::new(
                     book,
                     &sh_name_lowercase,
-                    &SEARCH_REFERENCE_POINTS,
                     29, //передается для расчета смещения столбцов. Это сумма номеров столбцов Y-типа в DESIRED_DATA_ARRAY: 0 + 0 + 3 + 5 + 9 + 9 + 3.
                 );
 
@@ -99,20 +99,23 @@ fn main() {
         println!(
             " Идет построение структуры excel в зависимости от содержания итогов актов, ожидайте..."
         );
-        let mut report = Report::new(&report_name, &acts_vec);
+        let mut report = Report::new(&report_name, &acts_vec).unwrap();
 
         let _ = Term::stdout().clear_last_lines(1);
         println!(" Идет запись, ожидайте...");
 
         for act in acts_vec.iter() {
-            if let Err(err) = report.write(act) {
-                let _ = Term::stdout().clear_last_lines(1);
-                println!("\n{}\n{}", red.apply_to(" Возникла ошибка."), err);
-                println!("\n Файл, вызывающий ошибку: {}", act.path);
-                thread::sleep(Duration::from_secs(3));
-                println!("\n\n\n\n");
-                continue 'main_loop;
-            };
+            match report.write(act) {
+                Ok(updated_report) => report = updated_report,
+                Err(err) => {
+                    let _ = Term::stdout().clear_last_lines(1);
+                    println!("\n{}\n{}", red.apply_to(" Возникла ошибка."), err);
+                    println!("\n Файл, вызывающий ошибку: {}", act.path);
+                    thread::sleep(Duration::from_secs(3));
+                    println!("\n\n\n\n");
+                    continue 'main_loop;
+                }
+            }
         }
 
         let files_counter = report.body_size;

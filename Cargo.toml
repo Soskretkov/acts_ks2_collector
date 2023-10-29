@@ -1,18 +1,18 @@
 [package]
 name = "ks2_etl"
-version = "1.1.1"
+version = "1.1.2"
 edition = "2021"
 build = "build.rs"
 
 [build-dependencies]
-winres = "0.1"
+winres = "*"
 
 [dependencies]
-calamine = "0.18.0"
-xlsxwriter = "0.3.5"
-console = "0.15.0"
-itertools = "0.8.0"
+calamine = "*"
+xlsxwriter = "*"
+console = "*"
+itertools = "*"
 # error-chain = "0.12.4"
-regex = "1.5.6" #используется в load.rs
-walkdir = "2.3.2"
-dialoguer = "0.10.1"
+regex = "*" #используется в load.rs
+walkdir = "*"
+dialoguer = "*"

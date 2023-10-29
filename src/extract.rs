@@ -1,3 +1,4 @@
+use crate::config;
 use crate::error::Error;
 use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
 use std::collections::HashMap;
@@ -6,15 +7,13 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use walkdir::{DirEntry, WalkDir};
 
-const EXCEL_FILE_EXTENSION: &str = ".xlsm";
-
 #[derive(PartialEq)]
 pub enum Required {
     Y,
     N,
 }
 
-// Магические цифры в кортеже это смещение в столбцах от первого столбца в документе до столбца, содержащего указанный литерал. Такую запись легче воспринимать.
+// В кортеже первое значение это смещение от первого столбца до столбца, содержащего указанный литерал. В виде "магических цифр" запись вышла более читаемая.
 // Литералы маленькими буквами из-за того что, например, "Доп. соглашение" Excel переведет в "Доп. Соглашение" если встать в ячейку и нажать Enter. Перестраховка от сюрпризов
 pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 10] = [
     (0, Required::N, "исполнитель"),
@@ -80,7 +79,6 @@ impl<'a> Sheet {
         // (из-за мутабельности workbook проблема при попытке множественных ссылок: можно только клонировать)
         workbook: &'a mut Book,
         user_entered_sh_name: &'a str,
-        search_reference_points: &[(usize, Required, &'static str)],
         expected_sum_of_requir_col: usize,
     ) -> Result<Sheet, Error<'a>> {
         let sheet_name = workbook
@@ -94,7 +92,7 @@ impl<'a> Sheet {
             })?
             .clone();
 
-        let sheetXL = workbook
+        let xl_sheet = workbook
             .data
             .worksheet_range(&sheet_name)
             .ok_or(Error::CalamineSheetOfTheBookIsUndetectable {
@@ -108,11 +106,16 @@ impl<'a> Sheet {
                 })
             })?;
 
+        // это номера строки и столбца, с которых начинается диапазон данных листа
+        let sheet_start_coords = xl_sheet
+            .start()
+            .ok_or(Error::EmptySheetRange(user_entered_sh_name))?;
+
         let mut search_points = HashMap::new();
 
-        let mut temp_sh_iter = sheetXL.used_cells();
+        let mut temp_sh_iter = xl_sheet.used_cells();
         let mut temp;
-        for item in search_reference_points {
+        for item in SEARCH_REFERENCE_POINTS {
             match item.1 {
                 // Для Y-типов подходит расходуемый итератор - достигается проверка по очередности вохождения слов по строкам
                 // (т.е. "Стройку" мы ожидаем выше "Объекта, например")
@@ -127,7 +130,7 @@ impl<'a> Sheet {
                 }
                 // Для N-типов нельзя использовать расходуемые итераторы, так как необязательное значение может и отсутсвовать (и при его поиске израсходуется итератор)
                 Required::N => {
-                    temp = sheetXL.used_cells().find(|x| {
+                    temp = xl_sheet.used_cells().find(|x| {
                         x.2.get_string()
                             .as_ref()
                             .unwrap_or_else(|| &"")
@@ -159,7 +162,7 @@ impl<'a> Sheet {
             .get("стройка")
             .unwrap_or_else(|| panic!("ложь: \"Необеспечены действительные имена HashMap\""));
 
-        let (just_a_amount_requir_col, just_a_sum_requir_col) = search_reference_points
+        let (just_a_amount_requir_col, just_a_sum_requir_col) = SEARCH_REFERENCE_POINTS
             .iter()
             .fold((0_usize, 0), |acc, item| match item.1 {
                 Required::Y => (
@@ -180,16 +183,13 @@ impl<'a> Sheet {
         {
             return Err(Error::ShiftedColumnsInHeader);
         }
-        let range_start_u32 = sheetXL
-            .start()
-            .ok_or(Error::EmptySheetRange(user_entered_sh_name))?;
 
-        let range_start = (range_start_u32.0 as usize, range_start_u32.1 as usize);
+        let range_start = (sheet_start_coords.0 as usize, sheet_start_coords.1 as usize);
 
         Ok(Sheet {
             path: workbook.path.clone(),
             sheet_name,
-            data: sheetXL,
+            data: xl_sheet,
             search_points,
             range_start,
         })
@@ -204,10 +204,12 @@ pub fn get_vector_of_books(path: PathBuf) -> Result<Vec<Result<Book, XlsxError>>
             if books_vector_len == 0 {
                 return Err(Error::NoFilesInSpecifiedPath(path));
             } else {
-                println!(
-                    "\n Обнаружено {} файлов с расширением \"{EXCEL_FILE_EXTENSION}\".",
-                    books_vector_len + temp_res.1 as usize
+                let message = format!(
+                    "\n Обнаружено {} файлов с расширением \"{}\".",
+                    books_vector_len + temp_res.1 as usize,
+                    config::EXCEL_FILE_EXTENSION
                 );
+                println!("{}", message);
                 if temp_res.1 > 0 {
                     println!(" Из них {} помечены \"@\" для исключения.", temp_res.1);
                 } else {
@@ -242,7 +244,7 @@ fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
         .filter(|e| {
             e.file_name()
                 .to_str()
-                .map(|s| !s.starts_with('~') & s.ends_with(EXCEL_FILE_EXTENSION))
+                .map(|s| !s.starts_with('~') & s.ends_with(config::EXCEL_FILE_EXTENSION))
                 .unwrap_or_else(|| false)
         });
 
