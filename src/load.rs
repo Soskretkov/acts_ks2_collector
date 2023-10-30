@@ -5,11 +5,12 @@ use regex::Regex;
 use std::collections::HashMap;
 use xlsxwriter::{format, worksheet::DateTime, Format, Workbook, Worksheet};
 
-const RESULT_SHEET_NAME: &str = "Result";
-const EXCEL_REPORT_START_ROW_OFFSET: u32 = 1;
+const XL_REPORT_RESULT_SHEET_NAME: &str = "result";
+const XL_REPORT_START_ROW_OFFSET: u32 = 0;
+const XL_REPORT_HEADER_SIZE_IN_ROW: u32 = 2;
 
 #[derive(Debug)]
-pub struct OutputData {
+pub struct ExtractionConfig {
     pub rename: Option<&'static str>,
     pub moving: Moving,
     pub sequence_number: usize,
@@ -17,10 +18,10 @@ pub struct OutputData {
     pub source: Source,
 }
 #[derive(Debug)]
-pub struct ShortOutputData<'b> {
-    pub name: &'b str,
-    pub expected_columns: u16,
-    pub sequence_number: usize,
+pub struct TotalsRowInfo<'b> {
+    pub row_name: &'b str,
+    pub row_instance_count: u16,
+    pub row_max_relative_number: usize,
 }
 #[derive(Debug, Clone, PartialEq)]
 
@@ -36,7 +37,7 @@ pub enum Matches {
     Contains,
 }
 
-// Четыре вида данных на выходе: в готовом виде в шапке, в готов виде в итогах акта (2 варанта), и нет готовых (нужно расчитать программой):
+// Четыре вида данных на выходе: 1. в готовом виде в шапке, 2. в готов виде в итогах акта (2 варианта), 3.вычисляемые
 #[derive(Debug, PartialEq)]
 pub enum Source {
     InTableHeader(&'static str),
@@ -47,11 +48,11 @@ pub enum Source {
 
 #[derive(Debug)]
 pub struct ExcelDataSet {
-    vector: Vec<OutputData>,
+    vector: Vec<ExtractionConfig>,
     number_of_columns: u16,
 }
 impl ExcelDataSet {
-    pub fn new(vector: Vec<OutputData>) -> ExcelDataSet {
+    pub fn new(vector: Vec<ExtractionConfig>) -> ExcelDataSet {
         let number_of_columns = Self::count_col(&vector);
 
         ExcelDataSet {
@@ -80,42 +81,42 @@ impl ExcelDataSet {
         let mut counter = 0;
         let mut index = 0;
 
-        for outputdata in self.vector.iter() {
-            if outputdata.moving == Moving::Del {
+        for extraction_config in self.vector.iter() {
+            if extraction_config.moving == Moving::Del {
                 continue;
             }
 
-            match outputdata {
-                OutputData {
+            match extraction_config {
+                ExtractionConfig {
                     source: Source::Calculate(text) | Source::InTableHeader(text),
                     ..
-                } if variant_eq(&outputdata.source, &src) && &name == text => {
+                } if variant_eq(&extraction_config.source, &src) && &name == text => {
                     return Some((index, counter));
                 }
-                OutputData {
+                ExtractionConfig {
                     source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
                     ..
-                } if variant_eq(&outputdata.source, &src)
+                } if variant_eq(&extraction_config.source, &src)
                     && variant_eq(m, &matches)
                     && m == &Matches::Exact
                     && name == text =>
                 {
                     return Some((index, counter));
                 }
-                OutputData {
+                ExtractionConfig {
                     source: Source::AtBasePrices(text, m) | Source::AtCurrPrices(text, m),
                     ..
-                } if variant_eq(&outputdata.source, &src)
+                } if variant_eq(&extraction_config.source, &src)
                     && variant_eq(m, &matches)
                     && m == &Matches::Contains
                     && name.contains(text) =>
                 {
                     return Some((index, counter));
                 }
-                OutputData { moving: mov, .. } => {
+                ExtractionConfig { moving: mov, .. } => {
                     if mov == &Moving::No || mov == &Moving::Yes {
                         index += 1;
-                        counter += outputdata.expected_columns;
+                        counter += extraction_config.expected_columns;
                     }
                 }
             };
@@ -123,12 +124,12 @@ impl ExcelDataSet {
         None
     }
 
-    fn count_col(vector: &[OutputData]) -> u16 {
+    fn count_col(vector: &[ExtractionConfig]) -> u16 {
         vector
             .iter()
-            .fold(0, |acc, outputdata| match outputdata.moving {
-                Moving::No => acc + outputdata.expected_columns,
-                Moving::Yes => acc + outputdata.expected_columns,
+            .fold(0, |acc, ExtractionConfig| match ExtractionConfig.moving {
+                Moving::No => acc + ExtractionConfig.expected_columns,
+                Moving::Yes => acc + ExtractionConfig.expected_columns,
                 _ => acc,
             })
     }
@@ -137,14 +138,14 @@ impl ExcelDataSet {
 fn ExcelDataSet_test() {
     #[rustfmt::skip]
         let vec_to_test = vec![
-            OutputData{rename: None,                           moving: Moving::No,  sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Объект")},
-            OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 2,  source: Source::AtBasePrices("Накладные расходы".to_string(), Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 3,  source: Source::AtBasePrices("Эксплуатация машин".to_string(), Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 4,  source: Source::AtCurrPrices("Накладные расходы".to_string(), Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 5,  source: Source::AtCurrPrices("Накладные".to_string(), Matches::Contains)},
-            OutputData{rename: Some("РЕНЕЙМ................"), moving: Moving::No,  sequence_number: 0, expected_columns: 6,  source: Source::AtCurrPrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
-            OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::Del, sequence_number: 0, expected_columns: 99, source: Source::AtBasePrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
-            OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 8,  source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)".to_string(), Matches::Exact)},
+            ExtractionConfig{rename: None,                           moving: Moving::No,  sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Объект")},
+            ExtractionConfig{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 2,  source: Source::AtBasePrices("Накладные расходы".to_string(), Matches::Exact)},
+            ExtractionConfig{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 3,  source: Source::AtBasePrices("Эксплуатация машин".to_string(), Matches::Exact)},
+            ExtractionConfig{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 4,  source: Source::AtCurrPrices("Накладные расходы".to_string(), Matches::Exact)},
+            ExtractionConfig{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 5,  source: Source::AtCurrPrices("Накладные".to_string(), Matches::Contains)},
+            ExtractionConfig{rename: Some("РЕНЕЙМ................"), moving: Moving::No,  sequence_number: 0, expected_columns: 6,  source: Source::AtCurrPrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
+            ExtractionConfig{rename: Some("УДАЛИТЬ..............."), moving: Moving::Del, sequence_number: 0, expected_columns: 99, source: Source::AtBasePrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
+            ExtractionConfig{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 8,  source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)".to_string(), Matches::Exact)},
         ];
     let ExcelDataSet = ExcelDataSet::new(vec_to_test);
 
@@ -159,56 +160,54 @@ fn ExcelDataSet_test() {
     );
     assert_eq!(
         Some((4, 10)),
-        ExcelDataSet.get_index_and_address_by_columns("curr", "Накладные расходы", Matches::Contains)
+        ExcelDataSet.get_index_and_address_by_columns(
+            "curr",
+            "Накладные расходы",
+            Matches::Contains
+        )
     );
 }
-pub struct Report {
-    pub book: Workbook,
+
+// Выступает в роли мета-структуры, которая классифицирует и хранит инструкции о том, как извлечь или обработать данные структуры Act для создания отчета.
+// Структура ExtractionConfig, в свою очередь, представляет собой отдельную такую инструкцию или параметры для отдельной группы данных из Act.
+pub struct WritingConfigs {
     pub main_set: ExcelDataSet,
     pub base_set: ExcelDataSet,
     pub curr_set: ExcelDataSet,
-    pub body_row_count: u32,
 }
 
-impl<'a> Report {
-    pub fn new(report_name: &'a str, acts_vec: &[Act]) -> Result<Report, Error<'a>> {
-        let wb = Workbook::new(report_name).or_else(|error| {
-            Err(Error::XlsxwriterWorkbookCreationError {
-                wb_name: report_name,
-                err: error,
-            })
-        })?;
-
+impl<'a> WritingConfigs {
+    pub fn new(acts_vec: &[Act]) -> Result<WritingConfigs, Error<'a>> {
         #[rustfmt::skip]
-        let main_list: Vec<OutputData> = vec![
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Папка (ссылка)")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Файл (ссылка)")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Акт №")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Акт дата")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Исполнитель")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Глава")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Объект")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Договор №")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Договор дата")},
-            // OutputData{rename: None,                                            moving: Moving::Yes,   sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Стоимость материальных ресурсов (всего)", Matches::Exact)},
-            // OutputData{rename: Some("Восстание машин"),                         moving: Moving::No, sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин", Matches::Exact)},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Смета №")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Смета наименование")},
-            OutputData{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("По смете в ц.2000г.")},
-            OutputData{rename: Some("Выполнение работ в ц.2000г., руб."),   moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Выполнение работ в ц.2000г.")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Отчетный период начало")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Отчетный период окончание")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Метод расчета")},
-            OutputData{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Затраты труда, чел.-час")},
-            OutputData{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Всего с НР и СП (тек".to_string(), Matches::Contains)},
-            OutputData{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtCurrPrices("Всего с НР и СП (баз".to_string(), Matches::Contains)},
-            OutputData{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1".to_string(), Matches::Exact)},
-            OutputData{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtCurrPrices("Итого с К = 1".to_string(), Matches::Exact)},
-            // OutputData{rename: Some("РЕНЕЙМ................"),                  moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
-            // OutputData{rename: None,                                            moving: Moving::Yes, expected_columns: 1, source: Source::AtBasePrices("ы", Matches::Contains)},
+        let main_cfg: Vec<ExtractionConfig> = vec![
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Папка (ссылка)")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Файл (ссылка)")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Акт №")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Акт дата")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Исполнитель")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Глава")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Объект")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Договор №")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Договор дата")},
+            // ExtractionConfig{rename: None,                                            moving: Moving::Yes,   sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Стоимость материальных ресурсов (всего)", Matches::Exact)},
+            // ExtractionConfig{rename: Some("Восстание машин"),                         moving: Moving::No, sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Эксплуатация машин", Matches::Exact)},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Смета №")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Смета наименование")},
+            ExtractionConfig{rename: Some("По смете в ц.2000г., руб."),           moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("По смете в ц.2000г.")},
+            ExtractionConfig{rename: Some("Выполнение работ в ц.2000г., руб."),   moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Выполнение работ в ц.2000г.")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Отчетный период начало")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Отчетный период окончание")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Метод расчета")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Затраты труда, чел.-час")},
+            ExtractionConfig{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Всего с НР и СП (тек".to_string(), Matches::Contains)},
+            ExtractionConfig{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtCurrPrices("Всего с НР и СП (баз".to_string(), Matches::Contains)},
+            ExtractionConfig{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtBasePrices("Итого с К = 1".to_string(), Matches::Exact)},
+            ExtractionConfig{rename: None,                                        moving: Moving::Del, sequence_number: 0, expected_columns: 1, source: Source::AtCurrPrices("Итого с К = 1".to_string(), Matches::Exact)},
+            // ExtractionConfig{rename: Some("РЕНЕЙМ................"),                  moving: Moving::No, expected_columns: 1, source: Source::AtBasePrices("Производство работ в зимнее время 4%", Matches::Exact)},
+            // ExtractionConfig{rename: None,                                            moving: Moving::Yes, expected_columns: 1, source: Source::AtBasePrices("ы", Matches::Contains)},
         ];
         // В векторе выше, перечислены далеко не все столбцы, что будут в акте (в акте может быть что угодно и при этом повторяться в неизвестном количестве).
-        // Думайте об этой структуре как о настроечной таблице, или даже центре управления: захотим удалим, захотим переименуем, переставим местами с ее помощью.
+        // Думайте об этой структуре как о настроечной таблице, или даже центре управления: захотим удалим, переименуем, переставим местами.
         // Позиция в векторе соответсвует позиции столбца в выходной форме (первая строка вектора будет первым столбцом в Excel от левого края).
         // Однако, в итогах акта будут встречаться столбцы, порядок чередования которых останется тот, который существует в актах.
         // Для excel-отчета потребуется три источника: шапка акта и два вида данных в его итогах: базовые и текущие цены.
@@ -217,86 +216,88 @@ impl<'a> Report {
         // но навреняка найдется такой акт, который имеет 16, 18, 0 или, скажем, 40 строк в итогах. Потребуется какая-то логика, чтобы соотнести 40 строк одного акта
         // с 17 строками других актов. Одна из задач: не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
 
-        let main_set = ExcelDataSet::new(main_list);
+        let main_set = ExcelDataSet::new(main_cfg);
 
-        let sh_outpdata_vec = Self::retrieve_info_about_totals(acts_vec);
-        let (vec_base, vec_curr) = Self::other_parts(&main_set.vector, sh_outpdata_vec);
-        let base_set = ExcelDataSet::new(vec_base);
-        let curr_set = ExcelDataSet::new(vec_curr);
-
-        Ok(Report {
-            book: wb,
+        let totals_row_info_vec = Self::get_totals_row_info(acts_vec);
+        let (vec_base_config, vec_curr_config) =
+            Self::get_price_part_configs(&main_set.vector, totals_row_info_vec);
+        let base_set = ExcelDataSet::new(vec_base_config);
+        let curr_set = ExcelDataSet::new(vec_curr_config);
+        Ok(Self {
             main_set,
             base_set,
             curr_set,
-            body_row_count: 0,
         })
     }
 
-    fn retrieve_info_about_totals(acts_vec: &[Act]) -> Vec<ShortOutputData> {
+    fn get_totals_row_info(acts_vec: &[Act]) -> Vec<TotalsRowInfo> {
         let mut hash = HashMap::<&str, (usize, usize)>::new();
-        let mut name: &str;
-        let mut sequence_number: usize;
-        let mut expected_columns: usize;
+        let mut row_name: &str;
+        let mut row_instance_count: usize;
+        let mut row_max_relative_number: usize;
 
         for act in acts_vec.iter() {
             for totalsrow in &act.data_of_totals {
-                name = &totalsrow.name;
-                sequence_number =
+                row_name = &totalsrow.name;
+                row_max_relative_number =
                     totalsrow.row_number.iter().max().unwrap() - act.start_row_of_totals;
-                expected_columns = totalsrow.row_number.len();
+                row_instance_count = totalsrow.row_number.len();
 
-                let entry = hash.get_mut(name);
+                let entry = hash.get_mut(row_name);
 
                 match entry {
                     Some((one, two)) => {
-                        if sequence_number > *one {
-                            *one = sequence_number;
+                        if row_max_relative_number > *one {
+                            *one = row_max_relative_number;
                         }
-                        if expected_columns > *two {
-                            *two = expected_columns;
+                        if row_instance_count > *two {
+                            *two = row_instance_count;
                         }
                     }
                     None => {
-                        hash.insert(name, (sequence_number, expected_columns));
+                        hash.insert(row_name, (row_max_relative_number, row_instance_count));
                     }
                 }
             }
         }
 
-        let vec: Vec<ShortOutputData> = hash
+        let vec: Vec<TotalsRowInfo> = hash
             .into_iter()
-            .map(|x| ShortOutputData {
-                name: x.0,
-                sequence_number: x.1 .0,
-                expected_columns: x.1 .1 as u16,
+            .map(|x| TotalsRowInfo {
+                row_name: x.0,
+                row_max_relative_number: x.1 .0,
+                row_instance_count: x.1 .1 as u16,
             })
-            .sorted_by_key(|x| x.name)
-            .sorted_by_key(|x| x.sequence_number)
+            .sorted_by_key(|x| x.row_name)
+            .sorted_by_key(|x| x.row_max_relative_number)
             .collect();
 
         vec
     }
 
-    fn other_parts(
-        part_1: &[OutputData],
-        sh_outpdata_vec: Vec<ShortOutputData>,
-    ) -> (Vec<OutputData>, Vec<OutputData>) {
+    fn get_price_part_configs(
+        part_1: &[ExtractionConfig],
+        totals_row_info_vec: Vec<TotalsRowInfo>,
+    ) -> (Vec<ExtractionConfig>, Vec<ExtractionConfig>) {
         let exclude_from_base = part_1
             .iter()
-            .filter(|outputdata| matches!(outputdata.source, Source::AtBasePrices(_, _)))
+            .filter(|ExtractionConfig| {
+                matches!(ExtractionConfig.source, Source::AtBasePrices(_, _))
+            })
             .collect::<Vec<_>>();
 
         let exclude_from_curr = part_1
             .iter()
-            .filter(|outputdata| matches!(outputdata.source, Source::AtCurrPrices(_, _)))
+            .filter(|ExtractionConfig| {
+                matches!(ExtractionConfig.source, Source::AtCurrPrices(_, _))
+            })
             .collect::<Vec<_>>();
 
-        let get_outputdata = |exclude: &[&OutputData],
-                              sh_outpdata: &ShortOutputData,
-                              kind: &str|
-         -> Option<OutputData> {
-            let name = sh_outpdata.name;
+        let extraction_config = |exclude: &[&ExtractionConfig],
+                                 sh_outpdata: &TotalsRowInfo,
+                                 kind: &str|
+         -> Option<ExtractionConfig> {
+            let name = sh_outpdata.row_name;
 
             let mut not_listed = true;
             let mut required = false;
@@ -305,7 +306,7 @@ impl<'a> Report {
 
             for item in exclude.iter() {
                 match item {
-                    OutputData {
+                    ExtractionConfig {
                         rename: set_name,
                         moving: mov,
                         source:
@@ -325,7 +326,7 @@ impl<'a> Report {
                         }
                         break;
                     }
-                    OutputData {
+                    ExtractionConfig {
                         rename: set_name,
                         moving: mov,
                         source:
@@ -351,38 +352,39 @@ impl<'a> Report {
 
             if required || not_listed {
                 let moving = Moving::No;
-                let sequence_number = sh_outpdata.sequence_number;
-                let expected_columns = sh_outpdata.expected_columns;
+                let sequence_number = sh_outpdata.row_max_relative_number;
+                let expected_columns = sh_outpdata.row_instance_count;
 
                 let source = match kind {
-                    "base" => Source::AtBasePrices(sh_outpdata.name.to_string(), matches),
-                    "curr" => Source::AtCurrPrices(sh_outpdata.name.to_string(), matches),
+                    "base" => Source::AtBasePrices(sh_outpdata.row_name.to_string(), matches),
+                    "curr" => Source::AtCurrPrices(sh_outpdata.row_name.to_string(), matches),
                     _ => {
                         unreachable!("операция не над итоговыми строками акта (не покрыты match)")
                     }
                 };
 
-                let outputdata = OutputData {
+                return Some(ExtractionConfig {
                     rename,
                     moving,
                     sequence_number,
                     expected_columns,
                     source,
-                };
-
-                return Some(outputdata);
+                });
             }
             None
         };
 
-        let (base_set, curr_set) = sh_outpdata_vec.into_iter().fold(
-            (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
+        let (base_set, curr_set) = totals_row_info_vec.into_iter().fold(
+            (
+                Vec::<ExtractionConfig>::new(),
+                Vec::<ExtractionConfig>::new(),
+            ),
             |mut acc, sh_outpdata| {
-                if let Some(x) = get_outputdata(&exclude_from_base, &sh_outpdata, "base") {
+                if let Some(x) = extraction_config(&exclude_from_base, &sh_outpdata, "base") {
                     acc.0.push(x)
                 };
 
-                if let Some(y) = get_outputdata(&exclude_from_curr, &sh_outpdata, "curr") {
+                if let Some(y) = extraction_config(&exclude_from_curr, &sh_outpdata, "curr") {
                     acc.1.push(y)
                 };
                 acc
@@ -391,17 +393,161 @@ impl<'a> Report {
         (base_set, curr_set)
     }
 
-    pub fn write(self, act: &'a Act) -> Result<Self, Error> {
+        // fn get_price_part_configs (
+    //     sample: &'a Act,
+    //     part_1: &[ExtractionConfig],
+    // ) -> (Vec<ExtractionConfig>, Vec<ExtractionConfig>) {
+    //     let exclude_from_base = part_1
+    //         .iter()
+    //         .filter(|ExtractionConfig| matches!(ExtractionConfig.source, Source::AtBasePrices(_, _)))
+    //         .collect::<Vec<_>>();
+
+    //     let exclude_from_curr = part_1
+    //         .iter()
+    //         .filter(|ExtractionConfig| matches!(ExtractionConfig.source, Source::AtCurrPrices(_, _)))
+    //         .collect::<Vec<_>>();
+
+    //     let extraction_config = |exclude: &[&ExtractionConfig],
+    //                           totalsrow: &'a TotalsRow,
+    //                           kind: &str|
+    //      -> Option<ExtractionConfig> {
+    //         let name = &totalsrow.name;
+
+    //         let mut not_listed = true;
+    //         let mut required = false;
+    //         let mut rename = None;
+    //         let matches = Matches::Exact;
+
+    //         for item in exclude.iter() {
+    //             match item {
+    //                 ExtractionConfig {
+    //                     rename: set_name,
+    //                     moving: mov,
+    //                     source:
+    //                         Source::AtBasePrices(text, Matches::Exact)
+    //                         | Source::AtCurrPrices(text, Matches::Exact),
+    //                     ..
+    //                 } if text == name => {
+    //                     not_listed = false;
+    //                     if mov == &Moving::No {
+    //                         required = true;
+    //                         rename = *set_name;
+
+    //                         println!(
+    //                             "other_print_parts: разрешил '{}' по точному совпадению имени, список досматриваться не будет",
+    //                             name
+    //                         );
+    //                     }
+    //                     break;
+    //                 }
+    //                 ExtractionConfig {
+    //                     rename: set_name,
+    //                     moving: mov,
+    //                     source:
+    //                         Source::AtBasePrices(text, Matches::Contains)
+    //                         | Source::AtCurrPrices(text, Matches::Contains),
+    //                     ..
+    //                 } if name.contains(text) => {
+    //                     not_listed = false;
+    //                     if mov == &Moving::No {
+    //                         required = true;
+    //                         rename = *set_name;
+
+    //                         println!(
+    //                             "other_print_parts: разрешил '{}' по НЕточному совпадению имени, список досматриваться не будет",
+    //                             name
+    //                         );
+    //                     }
+    //                     break;
+    //                 }
+    //                 _ => (),
+    //             }
+    //         }
+
+    //         if required || not_listed {
+    //             let moving = Moving::No;
+    //             let expected_columns = match kind {
+    //                 "base" => totalsrow.base_price.len() as u16,
+    //                 "curr" => totalsrow.curr_price.len() as u16,
+    //                 _ => {
+    //                     unreachable!("операция не над итоговыми строками акта")
+    //                 }
+    //             };
+
+    //             let source = match kind {
+    //                 "base" => Source::AtBasePrices(totalsrow.name.clone(), matches),
+    //                 "curr" => Source::AtCurrPrices(totalsrow.name.clone(), matches),
+    //                 _ => {
+    //                     unreachable!("операция не над итоговыми строками акта")
+    //                 }
+    //             };
+
+    //             let ExtractionConfig = ExtractionConfig {
+    //                 rename,
+    //                 moving,
+    //                 sequence_number: 0,
+    //                 expected_columns,
+    //                 source,
+    //             };
+
+    //             return Some(ExtractionConfig);
+    //         }
+    //         None
+    //     };
+
+    //     let (base_set, curr_set) = sample.data_of_totals.iter().fold(
+    //         (Vec::<ExtractionConfig>::new(), Vec::<ExtractionConfig>::new()),
+    //         |mut acc, smpl_totalsrow| {
+    //             if let Some(x) = extraction_config(&exclude_from_base, smpl_totalsrow, "base") {
+    //                 acc.0.push(x)
+    //             };
+
+    //             if let Some(y) = extraction_config(&exclude_from_curr, smpl_totalsrow, "curr") {
+    //                 acc.1.push(y)
+    //             };
+    //             acc
+    //         },
+    //     );
+    //     (base_set, curr_set)
+    // }
+}
+
+// cтруктура отчета Excel
+pub struct Report {
+    pub book: Workbook,
+    pub writing_configs: WritingConfigs,
+    pub body_syze_in_row: u32,
+}
+
+impl<'a> Report {
+    pub fn new(report_name: &'a str, acts_vec: &[Act]) -> Result<Report, Error<'a>> {
+        let wb = Workbook::new(report_name).or_else(|error| {
+            Err(Error::XlsxwriterWorkbookCreationError {
+                wb_name: report_name,
+                err: error,
+            })
+        })?;
+
         // создание пустого листа для записи результата
-        self.book
-            .add_worksheet(Some(RESULT_SHEET_NAME))
+        let mut sheet = &mut wb
+            .add_worksheet(Some(XL_REPORT_RESULT_SHEET_NAME))
             .or_else(|_| Err(Error::XlsxwriterSheetCreationFailed))?;
 
+        let writing_configs = WritingConfigs::new(acts_vec)?;
+
+        Ok(Report {
+            book: wb,
+            writing_configs,
+            body_syze_in_row: 0,
+        })
+    }
+
+    pub fn write(self, act: &'a Act) -> Result<Self, Error> {
         let mut updated_self = Self::write_header(self, act)?;
         for totalsrow in act.data_of_totals.iter() {
             updated_self = Self::write_totals(updated_self, totalsrow)?;
         }
-        updated_self.body_row_count += 1;
+        updated_self.body_syze_in_row += 1;
         Ok(updated_self)
     }
 
@@ -409,7 +555,7 @@ impl<'a> Report {
         // первая ошибка не зависит от наличия или отсутсвия листа
         let mut sh = self
             .book
-            .get_worksheet(RESULT_SHEET_NAME)
+            .get_worksheet(XL_REPORT_RESULT_SHEET_NAME)
             //  map_err не может быть использован шире чем преобразование ошибки и потому более идеоматичен тут чем or_else
             .map_err(|_| Error::XlsxwriterSheetCreationFailed)?
             .ok_or(Error::XlsxwriterSheetCreationFailed)?;
@@ -424,10 +570,10 @@ impl<'a> Report {
         let mut fmt_date = self.book.add_format();
         fmt_date.set_num_format("dd/mm/yyyy");
 
-        let row = EXCEL_REPORT_START_ROW_OFFSET + self.body_row_count + 1;
+        let row = XL_REPORT_START_ROW_OFFSET + XL_REPORT_HEADER_SIZE_IN_ROW + self.body_syze_in_row;
 
         let mut column = 0_u16;
-        for item in self.main_set.vector.iter() {
+        for item in self.writing_configs.main_set.vector.iter() {
             if item.moving == Moving::Del {
                 continue;
             }
@@ -586,15 +732,14 @@ impl<'a> Report {
         // первая ошибка не зависит от наличия или отсутсвия листа
         let mut sh = self
             .book
-            .get_worksheet(RESULT_SHEET_NAME)
-            //  map_err не может быть использован шире чем преобразование ошибки и потому более идеоматичен тут чем or_else
+            .get_worksheet(XL_REPORT_RESULT_SHEET_NAME)
             .map_err(|_| Error::XlsxwriterSheetCreationFailed)?
             .ok_or(Error::XlsxwriterSheetCreationFailed)?;
 
-        let main_set = &self.main_set;
-        let base_set = &self.base_set;
-        let curr_set = &self.curr_set;
-        let row = EXCEL_REPORT_START_ROW_OFFSET + self.body_row_count + 1;
+        let main_set = &self.writing_configs.main_set;
+        let base_set = &self.writing_configs.base_set;
+        let curr_set = &self.writing_configs.curr_set;
+        let row = XL_REPORT_START_ROW_OFFSET + XL_REPORT_HEADER_SIZE_IN_ROW + self.body_syze_in_row;
 
         let get_part = |kind: &str, name: &str| {
             let (part, column_information, corr) = match kind {
@@ -676,25 +821,28 @@ impl<'a> Report {
     pub fn end(self) -> Result<Workbook, Error<'a>> {
         let mut sh = self
             .book
-            .get_worksheet(RESULT_SHEET_NAME)
+            .get_worksheet(XL_REPORT_RESULT_SHEET_NAME)
             .or_else(|_| Err(Error::XlsxwriterSheetCreationFailed))?
             .ok_or_else(|| Error::XlsxwriterSheetCreationFailed)?;
 
-        let header_name: Vec<&OutputData> = self
-            .main_set
+        let main_set = &self.writing_configs.main_set;
+        let base_set = &self.writing_configs.base_set;
+        let curr_set = &self.writing_configs.curr_set;
+
+        let header_name: Vec<&ExtractionConfig> = main_set
             .vector
             .iter()
-            .filter(|outputdata| {
-                outputdata.moving != Moving::Del
-                    && !(outputdata.moving == Moving::No
-                        && (matches!(outputdata.source, Source::AtBasePrices(_, _))
-                            || matches!(outputdata.source, Source::AtCurrPrices(_, _))))
+            .filter(|ExtractionConfig| {
+                ExtractionConfig.moving != Moving::Del
+                    && !(ExtractionConfig.moving == Moving::No
+                        && (matches!(ExtractionConfig.source, Source::AtBasePrices(_, _))
+                            || matches!(ExtractionConfig.source, Source::AtCurrPrices(_, _))))
             })
-            .chain(self.base_set.vector.iter())
-            .chain(self.curr_set.vector.iter())
+            .chain(base_set.vector.iter())
+            .chain(curr_set.vector.iter())
             .collect();
 
-        let header_row = EXCEL_REPORT_START_ROW_OFFSET;
+        let header_row = XL_REPORT_START_ROW_OFFSET + XL_REPORT_HEADER_SIZE_IN_ROW - 1;
 
         // Это формат для заголовка excel-таблицы
         let mut fmt_header = self.book.add_format();
@@ -735,20 +883,20 @@ impl<'a> Report {
         ];
 
         let mut counter = 0;
-        for outputdata in header_name.iter() {
-            let prefix = match outputdata.source {
+        for ExtractionConfig in header_name.iter() {
+            let prefix = match ExtractionConfig.source {
                 Source::AtBasePrices(_, _) => Some("БЦ"),
                 Source::AtCurrPrices(_, _) => Some("TЦ"),
                 _ => None,
             };
-            let name = match &outputdata.source {
+            let name = match &ExtractionConfig.source {
                 Source::InTableHeader(x) => x,
                 Source::Calculate(x) => x,
                 Source::AtBasePrices(x, _) => &x[..],
                 Source::AtCurrPrices(x, _) => &x[..],
             };
 
-            let renaming_name = match outputdata.rename {
+            let renaming_name = match ExtractionConfig.rename {
                 Some(x) => x,
                 _ => name,
             }
@@ -763,36 +911,35 @@ impl<'a> Report {
                 renaming_name
             };
 
-            for exp_col in 0..outputdata.expected_columns {
+            for exp_col in 0..ExtractionConfig.expected_columns {
                 let col = counter + exp_col;
                 write_string(&mut sh, header_row, col, &new_name, Some(&fmt_header))?;
 
                 //вычисляется ширина столбца excel при переносе строк в ячейке
-                let width = if counter < self.main_set.number_of_columns
-                    && !name_in_formula_insertion_list
-                {
-                    let name_len = new_name.chars().count() / 2;
-                    let mut first_line_len = 0;
-                    for word in new_name.split(' ') {
-                        first_line_len += word.chars().count() + 1;
-                        if first_line_len > name_len {
-                            break;
+                let width =
+                    if counter < main_set.number_of_columns && !name_in_formula_insertion_list {
+                        let name_len = new_name.chars().count() / 2;
+                        let mut first_line_len = 0;
+                        for word in new_name.split(' ') {
+                            first_line_len += word.chars().count() + 1;
+                            if first_line_len > name_len {
+                                break;
+                            }
                         }
-                    }
-                    11.max(first_line_len) as f64
-                } else {
-                    20.11
-                };
+                        11.max(first_line_len) as f64
+                    } else {
+                        20.11
+                    };
 
                 sh.set_column(col, col, width, None);
             }
-            counter += outputdata.expected_columns;
+            counter += ExtractionConfig.expected_columns;
         }
 
-        let last_row = EXCEL_REPORT_START_ROW_OFFSET + self.body_row_count;
-        let last_col = self.main_set.get_number_of_columns()
-            + self.base_set.get_number_of_columns()
-            + self.curr_set.get_number_of_columns()
+        let last_row = XL_REPORT_START_ROW_OFFSET + XL_REPORT_HEADER_SIZE_IN_ROW - 1 + self.body_syze_in_row;
+        let last_col = main_set.get_number_of_columns()
+            + base_set.get_number_of_columns()
+            + curr_set.get_number_of_columns()
             - 1;
 
         let first_row_tab_body = header_row + 1;
@@ -803,8 +950,7 @@ impl<'a> Report {
         sh.freeze_panes(first_row_tab_body, 0);
 
         // Вставка формулы с подсчетом количества строк по excel-таблице
-        let (_, column_sbt_103) = self
-            .main_set
+        let (_, column_sbt_103) = main_set
             .get_index_and_address_by_columns("calc", "Акт №", Matches::Exact)
             .unwrap();
         let col_prefix = column_written_with_letters(column_sbt_103);
@@ -838,15 +984,14 @@ impl<'a> Report {
             formula_insertion_list
                 .into_iter()
                 .fold(Vec::<u16>::new(), |mut vec, item| {
-                    let (_, column_sbt_109) = self
-                        .main_set
+                    let (_, column_sbt_109) = main_set
                         .get_index_and_address_by_columns(item.0, item.1, Matches::Exact)
                         .unwrap();
                     vec.push(column_sbt_109);
                     vec
                 });
 
-        for i in self.main_set.get_number_of_columns()..=last_col {
+        for i in main_set.get_number_of_columns()..=last_col {
             col_to_insert_formulas.push(i as u16)
         }
 
@@ -863,123 +1008,7 @@ impl<'a> Report {
         Ok(self.book)
     }
 
-    // fn other_print_parts(
-    //     sample: &'a Act,
-    //     part_1: &[OutputData],
-    // ) -> (Vec<OutputData>, Vec<OutputData>) {
-    //     let exclude_from_base = part_1
-    //         .iter()
-    //         .filter(|outputdata| matches!(outputdata.source, Source::AtBasePrices(_, _)))
-    //         .collect::<Vec<_>>();
 
-    //     let exclude_from_curr = part_1
-    //         .iter()
-    //         .filter(|outputdata| matches!(outputdata.source, Source::AtCurrPrices(_, _)))
-    //         .collect::<Vec<_>>();
-
-    //     let get_outputdata = |exclude: &[&OutputData],
-    //                           totalsrow: &'a TotalsRow,
-    //                           kind: &str|
-    //      -> Option<OutputData> {
-    //         let name = &totalsrow.name;
-
-    //         let mut not_listed = true;
-    //         let mut required = false;
-    //         let mut rename = None;
-    //         let matches = Matches::Exact;
-
-    //         for item in exclude.iter() {
-    //             match item {
-    //                 OutputData {
-    //                     rename: set_name,
-    //                     moving: mov,
-    //                     source:
-    //                         Source::AtBasePrices(text, Matches::Exact)
-    //                         | Source::AtCurrPrices(text, Matches::Exact),
-    //                     ..
-    //                 } if text == name => {
-    //                     not_listed = false;
-    //                     if mov == &Moving::No {
-    //                         required = true;
-    //                         rename = *set_name;
-
-    //                         println!(
-    //                             "other_print_parts: разрешил '{}' по точному совпадению имени, список досматриваться не будет",
-    //                             name
-    //                         );
-    //                     }
-    //                     break;
-    //                 }
-    //                 OutputData {
-    //                     rename: set_name,
-    //                     moving: mov,
-    //                     source:
-    //                         Source::AtBasePrices(text, Matches::Contains)
-    //                         | Source::AtCurrPrices(text, Matches::Contains),
-    //                     ..
-    //                 } if name.contains(text) => {
-    //                     not_listed = false;
-    //                     if mov == &Moving::No {
-    //                         required = true;
-    //                         rename = *set_name;
-
-    //                         println!(
-    //                             "other_print_parts: разрешил '{}' по НЕточному совпадению имени, список досматриваться не будет",
-    //                             name
-    //                         );
-    //                     }
-    //                     break;
-    //                 }
-    //                 _ => (),
-    //             }
-    //         }
-
-    //         if required || not_listed {
-    //             let moving = Moving::No;
-    //             let expected_columns = match kind {
-    //                 "base" => totalsrow.base_price.len() as u16,
-    //                 "curr" => totalsrow.curr_price.len() as u16,
-    //                 _ => {
-    //                     unreachable!("операция не над итоговыми строками акта")
-    //                 }
-    //             };
-
-    //             let source = match kind {
-    //                 "base" => Source::AtBasePrices(totalsrow.name.clone(), matches),
-    //                 "curr" => Source::AtCurrPrices(totalsrow.name.clone(), matches),
-    //                 _ => {
-    //                     unreachable!("операция не над итоговыми строками акта")
-    //                 }
-    //             };
-
-    //             let outputdata = OutputData {
-    //                 rename,
-    //                 moving,
-    //                 sequence_number: 0,
-    //                 expected_columns,
-    //                 source,
-    //             };
-
-    //             return Some(outputdata);
-    //         }
-    //         None
-    //     };
-
-    //     let (base_set, curr_set) = sample.data_of_totals.iter().fold(
-    //         (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
-    //         |mut acc, smpl_totalsrow| {
-    //             if let Some(x) = get_outputdata(&exclude_from_base, smpl_totalsrow, "base") {
-    //                 acc.0.push(x)
-    //             };
-
-    //             if let Some(y) = get_outputdata(&exclude_from_curr, smpl_totalsrow, "curr") {
-    //                 acc.1.push(y)
-    //             };
-    //             acc
-    //         },
-    //     );
-    //     (base_set, curr_set)
-    // }
 } //end Report
 
 fn write_string<'a>(

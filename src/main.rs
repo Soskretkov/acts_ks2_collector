@@ -117,7 +117,7 @@ fn main() {
             }
         }
 
-        let files_counter = report.body_row_count;
+        let files_counter = report.body_syze_in_row;
 
         if report.end().unwrap().close().is_err() {
             let _ = Term::stdout().clear_last_lines(3);

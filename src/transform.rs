@@ -3,6 +3,20 @@ use calamine::DataType;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
+pub enum DataVariant {
+    String(String),
+    Float(f64),
+}
+
+#[derive(Debug, Clone)]
+pub struct TotalsRow {
+    pub name: String,
+    pub base_price: Vec<Option<f64>>,
+    pub curr_price: Vec<Option<f64>>,
+    pub row_number: Vec<usize>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Act {
     pub path: String,
     pub sheetname: String,
@@ -156,18 +170,4 @@ impl Act {
 
         Ok(temp_vec_row)
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct TotalsRow {
-    pub name: String,
-    pub base_price: Vec<Option<f64>>,
-    pub curr_price: Vec<Option<f64>>,
-    pub row_number: Vec<usize>,
-}
-
-#[derive(Debug, Clone)]
-pub enum DataVariant {
-    String(String),
-    Float(f64),
 }
