@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use xlsxwriter::{format, worksheet::DateTime, Format, Workbook, Worksheet};
 
 const RESULT_SHEET_NAME: &str = "Result";
+const EXCEL_REPORT_START_ROW_OFFSET: u32 = 1;
 
 #[derive(Debug)]
 pub struct OutputData {
@@ -45,15 +46,15 @@ pub enum Source {
 }
 
 #[derive(Debug)]
-pub struct PrintPart {
+pub struct ExcelDataSet {
     vector: Vec<OutputData>,
     number_of_columns: u16,
 }
-impl PrintPart {
-    pub fn new(vector: Vec<OutputData>) -> PrintPart {
+impl ExcelDataSet {
+    pub fn new(vector: Vec<OutputData>) -> ExcelDataSet {
         let number_of_columns = Self::count_col(&vector);
 
-        PrintPart {
+        ExcelDataSet {
             vector,
             number_of_columns,
         }
@@ -133,7 +134,7 @@ impl PrintPart {
     }
 }
 #[test]
-fn PrintPart_test() {
+fn ExcelDataSet_test() {
     #[rustfmt::skip]
         let vec_to_test = vec![
             OutputData{rename: None,                           moving: Moving::No,  sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Объект")},
@@ -145,12 +146,12 @@ fn PrintPart_test() {
             OutputData{rename: Some("УДАЛИТЬ..............."), moving: Moving::Del, sequence_number: 0, expected_columns: 99, source: Source::AtBasePrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
             OutputData{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 8,  source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)".to_string(), Matches::Exact)},
         ];
-    let printpart = PrintPart::new(vec_to_test);
+    let ExcelDataSet = ExcelDataSet::new(vec_to_test);
 
-    assert_eq!(&29, &printpart.get_number_of_columns());
+    assert_eq!(&29, &ExcelDataSet.get_number_of_columns());
     assert_eq!(
         Some((6, 21)),
-        printpart.get_index_and_address_by_columns(
+        ExcelDataSet.get_index_and_address_by_columns(
             "curr",
             "Стоимость материальных ресурсов (всего)",
             Matches::Exact
@@ -158,16 +159,15 @@ fn PrintPart_test() {
     );
     assert_eq!(
         Some((4, 10)),
-        printpart.get_index_and_address_by_columns("curr", "Накладные расходы", Matches::Contains)
+        ExcelDataSet.get_index_and_address_by_columns("curr", "Накладные расходы", Matches::Contains)
     );
 }
 pub struct Report {
     pub book: Workbook,
-    pub part_main: PrintPart,
-    pub part_base: PrintPart,
-    pub part_curr: PrintPart,
-    pub skip_row: u32,
-    pub body_size: u32,
+    pub main_set: ExcelDataSet,
+    pub base_set: ExcelDataSet,
+    pub curr_set: ExcelDataSet,
+    pub body_row_count: u32,
 }
 
 impl<'a> Report {
@@ -212,25 +212,24 @@ impl<'a> Report {
         // Позиция в векторе соответсвует позиции столбца в выходной форме (первая строка вектора будет первым столбцом в Excel от левого края).
         // Однако, в итогах акта будут встречаться столбцы, порядок чередования которых останется тот, который существует в актах.
         // Для excel-отчета потребуется три источника: шапка акта и два вида данных в его итогах: базовые и текущие цены.
-        // Отчет будет написан из этих 3 частей: part_main, part_base, part_curr
+        // Отчет будет написан из этих 3 частей: main_set, base_set, curr_set
         // Размер Excel-таблицы по горизонтали зависит от количества строк в итогах актов (допустим, обычно итоги имеют 17 строк,
         // но навреняка найдется такой акт, который имеет 16, 18, 0 или, скажем, 40 строк в итогах. Потребуется какая-то логика, чтобы соотнести 40 строк одного акта
         // с 17 строками других актов. Одна из задач: не сокращать эти 40 строк до 17 стандартных и выдать информацию пользователю без потерь.
 
-        let part_main = PrintPart::new(main_list);
+        let main_set = ExcelDataSet::new(main_list);
 
         let sh_outpdata_vec = Self::retrieve_info_about_totals(acts_vec);
-        let (vec_base, vec_curr) = Self::other_parts(&part_main.vector, sh_outpdata_vec);
-        let part_base = PrintPart::new(vec_base);
-        let part_curr = PrintPart::new(vec_curr);
+        let (vec_base, vec_curr) = Self::other_parts(&main_set.vector, sh_outpdata_vec);
+        let base_set = ExcelDataSet::new(vec_base);
+        let curr_set = ExcelDataSet::new(vec_curr);
 
         Ok(Report {
             book: wb,
-            part_main,
-            part_base,
-            part_curr,
-            skip_row: 1,
-            body_size: 0,
+            main_set,
+            base_set,
+            curr_set,
+            body_row_count: 0,
         })
     }
 
@@ -376,7 +375,7 @@ impl<'a> Report {
             None
         };
 
-        let (part_base, part_curr) = sh_outpdata_vec.into_iter().fold(
+        let (base_set, curr_set) = sh_outpdata_vec.into_iter().fold(
             (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
             |mut acc, sh_outpdata| {
                 if let Some(x) = get_outputdata(&exclude_from_base, &sh_outpdata, "base") {
@@ -389,7 +388,7 @@ impl<'a> Report {
                 acc
             },
         );
-        (part_base, part_curr)
+        (base_set, curr_set)
     }
 
     pub fn write(self, act: &'a Act) -> Result<Self, Error> {
@@ -402,7 +401,7 @@ impl<'a> Report {
         for totalsrow in act.data_of_totals.iter() {
             updated_self = Self::write_totals(updated_self, totalsrow)?;
         }
-        updated_self.body_size += 1;
+        updated_self.body_row_count += 1;
         Ok(updated_self)
     }
 
@@ -425,10 +424,10 @@ impl<'a> Report {
         let mut fmt_date = self.book.add_format();
         fmt_date.set_num_format("dd/mm/yyyy");
 
-        let row = self.skip_row + self.body_size + 1;
+        let row = EXCEL_REPORT_START_ROW_OFFSET + self.body_row_count + 1;
 
         let mut column = 0_u16;
-        for item in self.part_main.vector.iter() {
+        for item in self.main_set.vector.iter() {
             if item.moving == Moving::Del {
                 continue;
             }
@@ -592,22 +591,22 @@ impl<'a> Report {
             .map_err(|_| Error::XlsxwriterSheetCreationFailed)?
             .ok_or(Error::XlsxwriterSheetCreationFailed)?;
 
-        let part_main = &self.part_main;
-        let part_base = &self.part_base;
-        let part_curr = &self.part_curr;
-        let row = self.skip_row + self.body_size + 1;
+        let main_set = &self.main_set;
+        let base_set = &self.base_set;
+        let curr_set = &self.curr_set;
+        let row = EXCEL_REPORT_START_ROW_OFFSET + self.body_row_count + 1;
 
         let get_part = |kind: &str, name: &str| {
             let (part, column_information, corr) = match kind {
                 "base" => (
-                    "part_base",
-                    part_base.get_index_and_address_by_columns(kind, name, Matches::Exact),
+                    "base_set",
+                    base_set.get_index_and_address_by_columns(kind, name, Matches::Exact),
                     0,
                 ),
                 "curr" => (
-                    "part_curr",
-                    part_curr.get_index_and_address_by_columns(kind, name, Matches::Exact),
-                    part_base.get_number_of_columns(),
+                    "curr_set",
+                    curr_set.get_index_and_address_by_columns(kind, name, Matches::Exact),
+                    base_set.get_number_of_columns(),
                 ),
                 _ => unreachable!("операция не над итоговыми строками акта (не покрыты match)"),
             };
@@ -615,14 +614,14 @@ impl<'a> Report {
             match column_information {
                 Some((index, col_number_in_vec)) => Some((
                     part,
-                    corr + part_main.get_number_of_columns(),
+                    corr + main_set.get_number_of_columns(),
                     index,
                     col_number_in_vec,
                 )),
-                _ => match part_main.get_index_and_address_by_columns(kind, name, Matches::Exact) {
+                _ => match main_set.get_index_and_address_by_columns(kind, name, Matches::Exact) {
                     Some((index, col_number_in_vec)) => Some((
-                        "part_main",
-                        corr + part_main.get_number_of_columns(),
+                        "main_set",
+                        corr + main_set.get_number_of_columns(),
                         index,
                         col_number_in_vec,
                     )),
@@ -639,10 +638,10 @@ impl<'a> Report {
          -> Result<(), Error> {
             if let Some((part, corr, index, col_number_in_vec)) = column_info {
                 let (totalsrow_vec, part) = match part {
-                    "part_base" if kind == "base" => (&totalsrow.base_price, part_base),
-                    "part_curr" if kind == "curr" => (&totalsrow.curr_price, part_curr),
-                    "part_main" if kind == "base" => (&totalsrow.base_price, part_main),
-                    "part_main" if kind == "curr" => (&totalsrow.curr_price, part_main),
+                    "base_set" if kind == "base" => (&totalsrow.base_price, base_set),
+                    "curr_set" if kind == "curr" => (&totalsrow.curr_price, curr_set),
+                    "main_set" if kind == "base" => (&totalsrow.base_price, main_set),
+                    "main_set" if kind == "curr" => (&totalsrow.curr_price, main_set),
                     _ => {
                         unreachable!("операция не над итоговыми строками акта (не покрыты match)")
                     }
@@ -682,7 +681,7 @@ impl<'a> Report {
             .ok_or_else(|| Error::XlsxwriterSheetCreationFailed)?;
 
         let header_name: Vec<&OutputData> = self
-            .part_main
+            .main_set
             .vector
             .iter()
             .filter(|outputdata| {
@@ -691,11 +690,11 @@ impl<'a> Report {
                         && (matches!(outputdata.source, Source::AtBasePrices(_, _))
                             || matches!(outputdata.source, Source::AtCurrPrices(_, _))))
             })
-            .chain(self.part_base.vector.iter())
-            .chain(self.part_curr.vector.iter())
+            .chain(self.base_set.vector.iter())
+            .chain(self.curr_set.vector.iter())
             .collect();
 
-        let header_row = self.skip_row;
+        let header_row = EXCEL_REPORT_START_ROW_OFFSET;
 
         // Это формат для заголовка excel-таблицы
         let mut fmt_header = self.book.add_format();
@@ -769,7 +768,7 @@ impl<'a> Report {
                 write_string(&mut sh, header_row, col, &new_name, Some(&fmt_header))?;
 
                 //вычисляется ширина столбца excel при переносе строк в ячейке
-                let width = if counter < self.part_main.number_of_columns
+                let width = if counter < self.main_set.number_of_columns
                     && !name_in_formula_insertion_list
                 {
                     let name_len = new_name.chars().count() / 2;
@@ -790,10 +789,10 @@ impl<'a> Report {
             counter += outputdata.expected_columns;
         }
 
-        let last_row = self.skip_row + self.body_size;
-        let last_col = self.part_main.get_number_of_columns()
-            + self.part_base.get_number_of_columns()
-            + self.part_curr.get_number_of_columns()
+        let last_row = EXCEL_REPORT_START_ROW_OFFSET + self.body_row_count;
+        let last_col = self.main_set.get_number_of_columns()
+            + self.base_set.get_number_of_columns()
+            + self.curr_set.get_number_of_columns()
             - 1;
 
         let first_row_tab_body = header_row + 1;
@@ -805,7 +804,7 @@ impl<'a> Report {
 
         // Вставка формулы с подсчетом количества строк по excel-таблице
         let (_, column_sbt_103) = self
-            .part_main
+            .main_set
             .get_index_and_address_by_columns("calc", "Акт №", Matches::Exact)
             .unwrap();
         let col_prefix = column_written_with_letters(column_sbt_103);
@@ -840,14 +839,14 @@ impl<'a> Report {
                 .into_iter()
                 .fold(Vec::<u16>::new(), |mut vec, item| {
                     let (_, column_sbt_109) = self
-                        .part_main
+                        .main_set
                         .get_index_and_address_by_columns(item.0, item.1, Matches::Exact)
                         .unwrap();
                     vec.push(column_sbt_109);
                     vec
                 });
 
-        for i in self.part_main.get_number_of_columns()..=last_col {
+        for i in self.main_set.get_number_of_columns()..=last_col {
             col_to_insert_formulas.push(i as u16)
         }
 
@@ -966,7 +965,7 @@ impl<'a> Report {
     //         None
     //     };
 
-    //     let (part_base, part_curr) = sample.data_of_totals.iter().fold(
+    //     let (base_set, curr_set) = sample.data_of_totals.iter().fold(
     //         (Vec::<OutputData>::new(), Vec::<OutputData>::new()),
     //         |mut acc, smpl_totalsrow| {
     //             if let Some(x) = get_outputdata(&exclude_from_base, smpl_totalsrow, "base") {
@@ -979,7 +978,7 @@ impl<'a> Report {
     //             acc
     //         },
     //     );
-    //     (part_base, part_curr)
+    //     (base_set, curr_set)
     // }
 } //end Report
 
