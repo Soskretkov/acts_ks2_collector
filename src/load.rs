@@ -3,6 +3,7 @@ use crate::transform::{Act, DataVariant, TotalsRow};
 use itertools::Itertools;
 use regex::Regex;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use xlsxwriter::{format, worksheet::DateTime, Format, Workbook, Worksheet};
 
 const XL_REPORT_RESULT_SHEET_NAME: &str = "result";
@@ -393,7 +394,7 @@ impl<'a> WritingConfigs {
         (base_set, curr_set)
     }
 
-        // fn get_price_part_configs (
+    // fn get_price_part_configs (
     //     sample: &'a Act,
     //     part_1: &[ExtractionConfig],
     // ) -> (Vec<ExtractionConfig>, Vec<ExtractionConfig>) {
@@ -520,10 +521,11 @@ pub struct Report {
 }
 
 impl<'a> Report {
-    pub fn new(report_name: &'a str, acts_vec: &[Act]) -> Result<Report, Error<'a>> {
-        let wb = Workbook::new(report_name).or_else(|error| {
-            Err(Error::XlsxwriterWorkbookCreationError {
-                wb_name: report_name,
+    pub fn new(filepath: &'a PathBuf, acts_vec: &[Act]) -> Result<Report, Error<'a>> {    
+        let file_stem_string = filepath.file_stem().unwrap().to_str().unwrap();
+        let wb = Workbook::new(&filepath.display().to_string()).or_else(|error| {
+            Err(Error::XlsxwriterWorkbookCreation {
+                wb_name: file_stem_string,
                 err: error,
             })
         })?;
@@ -818,7 +820,7 @@ impl<'a> Report {
         Ok(self)
     }
 
-    pub fn end(self) -> Result<Workbook, Error<'a>> {
+    pub fn write_and_close_report(self, filepath: &'a PathBuf) -> Result<(), Error<'a>> {
         let mut sh = self
             .book
             .get_worksheet(XL_REPORT_RESULT_SHEET_NAME)
@@ -936,7 +938,8 @@ impl<'a> Report {
             counter += ExtractionConfig.expected_columns;
         }
 
-        let last_row = XL_REPORT_START_ROW_OFFSET + XL_REPORT_HEADER_SIZE_IN_ROW - 1 + self.body_syze_in_row;
+        let last_row =
+            XL_REPORT_START_ROW_OFFSET + XL_REPORT_HEADER_SIZE_IN_ROW - 1 + self.body_syze_in_row;
         let last_col = main_set.get_number_of_columns()
             + base_set.get_number_of_columns()
             + curr_set.get_number_of_columns()
@@ -1005,10 +1008,14 @@ impl<'a> Report {
             )?;
         }
 
-        Ok(self.book)
+        let file_stem_string = filepath.file_stem().unwrap().to_str().unwrap();
+        self.book
+            .close()
+            .map_err(|err| Error::XlsxwriterWorkbookClose {
+                wb_name: file_stem_string,
+                err,
+            })
     }
-
-
 } //end Report
 
 fn write_string<'a>(

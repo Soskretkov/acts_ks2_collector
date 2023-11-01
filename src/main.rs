@@ -2,6 +2,8 @@ use console::{Style, Term}; // для очистки консоли перед �
 use std::env;
 use std::thread; // для засыпания на секунду-две при печати сообщений
 use std::time::Duration; // для засыпания на секунду-две при печати сообщений // имя ".exe" будет присвоено файлу Excel
+use std::path;
+mod config;
 mod error;
 mod extract;
 mod load;
@@ -21,12 +23,15 @@ fn main() {
         // let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
 
         let sh_name_lowercase = sh_name.to_lowercase();
-        let report_name = env::args()
+        let string_report_path = env::args()
             .next()
             .unwrap()
             .trim_end_matches(".exe")
             .to_owned()
             + ".xlsx";
+
+        let report_path = path::PathBuf::from(string_report_path);
+        // let file_stem_string = report_path.file_stem().unwrap().to_str().unwrap();
 
         let cyan = Style::new().cyan();
         let red = Style::new().red();
@@ -37,7 +42,7 @@ fn main() {
             Err(err) => {
                 let _ = Term::stdout().clear_last_lines(1);
                 println!(
-                    "\n{}\n{}\n",
+                    "\n{}\n{}",
                     red.apply_to(" Возникла ошибка."),
                     err.to_string()
                 );
@@ -65,7 +70,6 @@ fn main() {
                             red.apply_to(" Возникла ошибка."),
                             err.to_string()
                         );
-                        println!("\n Файл, вызывающий ошибку: {}", book.path.display());
                         thread::sleep(Duration::from_secs(3));
                         println!("\n\n\n\n");
                         continue 'main_loop;
@@ -77,8 +81,11 @@ fn main() {
                     Ok(x) => x,
                     Err(err) => {
                         let _ = Term::stdout().clear_last_lines(1);
-                        println!("\n{}\n{}", red.apply_to(" Возникла ошибка."), err);
-                        println!("\n Файл, вызывающий ошибку: {}", book.path.display());
+                        println!(
+                            "\n{}\n{}",
+                            red.apply_to(" Возникла ошибка."),
+                            err.to_string()
+                        );
                         thread::sleep(Duration::from_secs(3));
                         println!("\n\n\n\n");
                         continue 'main_loop;
@@ -98,7 +105,7 @@ fn main() {
         println!(
             " Идет построение структуры excel в зависимости от содержания итогов актов, ожидайте..."
         );
-        let mut report = Report::new(&report_name, &acts_vec).unwrap();
+        let mut report = Report::new(&report_path, &acts_vec).unwrap();
 
         let _ = Term::stdout().clear_last_lines(1);
         println!(" Идет запись, ожидайте...");
@@ -108,8 +115,11 @@ fn main() {
                 Ok(updated_report) => report = updated_report,
                 Err(err) => {
                     let _ = Term::stdout().clear_last_lines(1);
-                    println!("\n{}\n{}", red.apply_to(" Возникла ошибка."), err);
-                    println!("\n Файл, вызывающий ошибку: {}", act.path);
+                    println!(
+                        "\n{}\n{}",
+                        red.apply_to(" Возникла ошибка."),
+                        err.to_string()
+                    );
                     thread::sleep(Duration::from_secs(3));
                     println!("\n\n\n\n");
                     continue 'main_loop;
@@ -119,18 +129,22 @@ fn main() {
 
         let files_counter = report.body_syze_in_row;
 
-        if report.end().unwrap().close().is_err() {
+        if let Err(err) = report.write_and_close_report(&report_path) {
             let _ = Term::stdout().clear_last_lines(3);
-            println!("\n{}", red.apply_to(" Возникла ошибка."));
-            println!(" Вероятная причина: не закрыт файл Excel с результатами прошлого сбора.");
+            println!(
+                "\n{}\n{}",
+                red.apply_to(" Возникла ошибка."),
+                err.to_string()
+            );
             thread::sleep(Duration::from_secs(3));
             println!("\n\n\n\n");
             continue 'main_loop;
         }
+
         let _ = Term::stdout().clear_last_lines(1);
         println!("{}", cyan.apply_to(" Успешно выполнено."));
         println!(" Собрано {} файла(ов).", files_counter);
-        println!("\n Создан файл \"{}\"", report_name);
+        println!("\n Создан файл \"{}\"", report_path.display());
         thread::sleep(Duration::from_secs(1));
         println!("\n\n");
         continue 'main_loop;

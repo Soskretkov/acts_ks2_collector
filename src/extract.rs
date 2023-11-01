@@ -1,3 +1,4 @@
+use crate::config::XL_FILE_EXTENSION;
 use crate::error::Error;
 use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
 use std::collections::HashMap;
@@ -5,8 +6,6 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use walkdir::{DirEntry, WalkDir};
-
-const EXCEL_FILE_EXTENSION: &str = ".xlsm";
 
 #[derive(PartialEq)]
 pub enum Required {
@@ -88,6 +87,7 @@ impl<'a> Sheet {
             .iter()
             .find(|name| name.to_lowercase() == user_entered_sh_name)
             .ok_or(Error::CalamineSheetOfTheBookIsUndetectable {
+                file_path: &workbook.path,
                 sh_name_for_search: user_entered_sh_name,
                 sh_names: workbook.data.sheet_names().to_owned(),
             })?
@@ -97,20 +97,24 @@ impl<'a> Sheet {
             .data
             .worksheet_range(&sheet_name)
             .ok_or(Error::CalamineSheetOfTheBookIsUndetectable {
+                file_path: &workbook.path,
                 sh_name_for_search: user_entered_sh_name,
                 sh_names: workbook.data.sheet_names().to_owned(),
             })?
             .or_else(|error| {
                 Err(Error::CalamineSheetOfTheBookIsUnreadable {
+                    file_path: &workbook.path,
                     sh_name: sheet_name.to_owned(),
                     err: error,
                 })
             })?;
 
         // это номера строки и столбца, с которых начинается диапазон данных листа
-        let sheet_start_coords = xl_sheet
-            .start()
-            .ok_or(Error::EmptySheetRange(user_entered_sh_name))?;
+        // при ошибки передается точное имя листа (с учетом регистра, в отличии от имени, введеного пользователем)
+        let sheet_start_coords = xl_sheet.start().ok_or(Error::EmptySheetRange {
+            file_path: &workbook.path,
+            sh_name: sheet_name.to_owned(),
+        })?;
 
         let mut search_points = HashMap::new();
 
@@ -156,7 +160,7 @@ impl<'a> Sheet {
 
         search_points
             .get(test)
-            .ok_or(Error::SheetNotContainAllNecessaryData)?;
+            .ok_or(Error::SheetNotContainAllNecessaryData(&workbook.path))?;
 
         // Проверка значений на удаленность столбцов, чтобы гарантировать что найден нужный лист.
         let first_col = search_points
@@ -182,7 +186,7 @@ impl<'a> Sheet {
         if let false = just_a_sum_requir_col - first_col.1 * just_a_amount_requir_col
             == expected_sum_of_requir_col
         {
-            return Err(Error::ShiftedColumnsInHeader);
+            return Err(Error::ShiftedColumnsInHeader(&workbook.path));
         }
 
         let range_start = (sheet_start_coords.0 as usize, sheet_start_coords.1 as usize);
@@ -208,7 +212,7 @@ pub fn get_vector_of_books(path: PathBuf) -> Result<Vec<Result<Book, XlsxError>>
                 let message = format!(
                     "\n Обнаружено {} файлов с расширением \"{}\".",
                     books_vector_len + temp_res.1 as usize,
-                    EXCEL_FILE_EXTENSION
+                    XL_FILE_EXTENSION
                 );
                 println!("{}", message);
                 if temp_res.1 > 0 {
@@ -245,7 +249,7 @@ fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
         .filter(|e| {
             e.file_name()
                 .to_str()
-                .map(|s| !s.starts_with('~') & s.ends_with(EXCEL_FILE_EXTENSION))
+                .map(|s| !s.starts_with('~') & s.ends_with(XL_FILE_EXTENSION))
                 .unwrap_or_else(|| false)
         });
 
