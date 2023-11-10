@@ -1,3 +1,5 @@
 /target
 /search*
-ks2_etl.xlsx.lnk
+~$*.xls*
+/*.lnk
+_*

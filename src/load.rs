@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::errors::Error;
 use crate::transform::{Act, DataVariant, TotalsRow};
 use itertools::Itertools;
 use regex::Regex;
@@ -360,7 +360,7 @@ impl<'a> WritingConfigs {
                     "base" => Source::AtBasePrices(sh_outpdata.row_name.to_string(), matches),
                     "curr" => Source::AtCurrPrices(sh_outpdata.row_name.to_string(), matches),
                     _ => {
-                        unreachable!("операция не над итоговыми строками акта (не покрыты match)")
+                        unreachable!("Операция не над итоговыми строками акта (не покрыта match)")
                     }
                 };
 
@@ -722,7 +722,7 @@ impl<'a> Report {
                             write_formula(&mut sh, row, column, &formula, Some(&fmt_url))?;
                         };
                     }
-                    _ => unreachable!("Данные не предусмотренные к запии (не покрыты match)"),
+                    _ => unreachable!("Данные не предусмотренные к записи (не покрыты match)"),
                 }
             }
             column += item.expected_columns;
@@ -755,7 +755,7 @@ impl<'a> Report {
                     curr_set.get_index_and_address_by_columns(kind, name, Matches::Exact),
                     base_set.get_number_of_columns(),
                 ),
-                _ => unreachable!("операция не над итоговыми строками акта (не покрыты match)"),
+                _ => unreachable!("Операция не над итоговыми строками акта (не покрыта match)"),
             };
 
             match column_information {
@@ -790,7 +790,7 @@ impl<'a> Report {
                     "main_set" if kind == "base" => (&totalsrow.base_price, main_set),
                     "main_set" if kind == "curr" => (&totalsrow.curr_price, main_set),
                     _ => {
-                        unreachable!("операция не над итоговыми строками акта (не покрыты match)")
+                        unreachable!("Операция не над итоговыми строками акта (не покрыта match)")
                     }
                 };
 

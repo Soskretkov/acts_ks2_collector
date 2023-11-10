@@ -1,11 +1,11 @@
 use crate::config::XL_FILE_EXTENSION;
-use crate::error::Error;
+use crate::errors::Error;
 use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
 #[derive(PartialEq)]
 pub enum Required {
@@ -52,6 +52,12 @@ pub const DESIRED_DATA_ARRAY: [DesiredData; 16] = [
     DesiredData{name:"Метод расчета",                offset: Some(("наименование работ и затрат",    (-1, -3)))},
     DesiredData{name:"Затраты труда, чел.-час",      offset: None},
 ];
+
+pub struct ExtractedXlBooks {
+    pub books: Vec<Result<Book, XlsxError>>,
+    pub file_count_excluded: usize,
+}
+
 pub struct Book {
     pub path: PathBuf,
     pub data: Xlsx<BufReader<File>>,
@@ -203,49 +209,8 @@ impl<'a> Sheet {
     }
 }
 
-pub fn get_vector_of_books(path: PathBuf) -> Result<Vec<Result<Book, XlsxError>>, Error<'static>> {
-    let books_vec = match path.is_dir() {
-        true => {
-            let temp_res = directory_traversal(&path);
-            let books_vector_len = (temp_res.0).len();
-            if books_vector_len == 0 {
-                return Err(Error::NoFilesInSpecifiedPath(path));
-            } else {
-                let message = format!(
-                    "\n Обнаружено {} файлов с расширением \"{}\".",
-                    books_vector_len + temp_res.1 as usize,
-                    XL_FILE_EXTENSION
-                );
-                println!("{}", message);
-                if temp_res.1 > 0 {
-                    println!(" Из них {} помечены \"@\" для исключения.", temp_res.1);
-                } else {
-                    println!(" Среди них нет файлов, помеченных как исключенные.");
-                }
-                println!("\n Идет отбор нужных файлов, ожидайте...");
-            }
-            Ok(temp_res.0)
-        }
-        false if path.is_file() => Ok(vec![Book::new(path)]),
-        _ => panic!(" Введенный пользователем путь не является папкой или файлом"),
-    };
-    books_vec
-}
-
-fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
-    let prefix = path.to_string_lossy().to_string();
-    let parent = path.parent().unwrap().to_string_lossy().to_string();
-
-    let is_excluded_file = |entry: &DirEntry| -> bool {
-        entry
-            .path()
-            .strip_prefix(&prefix)
-            .unwrap()
-            .to_string_lossy()
-            .contains('@')
-    };
-
-    let walkdir = WalkDir::new(path)
+pub fn extract_xl_books(path: &PathBuf) -> (Result<ExtractedXlBooks, Error<'static>>) {
+    let files: Vec<_> = WalkDir::new(path)
         .into_iter()
         .filter_map(|e| e.ok()) //будет молча пропускать каталоги, на доступ к которым у владельца запущенного процесса нет разрешения
         .filter(|e| {
@@ -253,30 +218,53 @@ fn directory_traversal(path: &PathBuf) -> (Vec<Result<Book, XlsxError>>, u32) {
                 .to_str()
                 .map(|s| !s.starts_with('~') & s.ends_with(XL_FILE_EXTENSION))
                 .unwrap_or_else(|| false)
-        });
+        })
+        .collect();
 
-    let mut counter = 1;
-    let mut books_vector = vec![];
-    let mut excluded_files_counter = 0_u32;
+    if files.len() > 0 {
+        println!("\nОтбранные файлы:");
+    }
 
-    for entry in walkdir {
-        if is_excluded_file(&entry) {
-            excluded_files_counter += 1;
-            continue;
+    let mut xl_files_vec = vec![];
+    let mut file_count_excluded = 0;
+    let mut file_print_counter = 0;
+
+    for entry in files {
+        let file_checked_path = entry
+            .path()
+            .strip_prefix(path)
+            .map_err(|err| Error::InternalLogic {
+                tech_descr: format!(
+                    r#"Не удалось выполнить проверку на наличие символа "@" в пути для файла:
+{}"#,
+                    entry.path().to_string_lossy()
+                ),
+                err: Some(Box::new(err)),
+            })?
+            .to_string_lossy();
+
+        if path.is_dir() {
+            if file_checked_path.contains('@') {
+                file_count_excluded += 1;
+                continue;
+            }
         }
 
-        let path_to_processed_file = entry
-            .path()
-            .strip_prefix(&parent)
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
+        let file_display_path = if path.is_dir() {
+            file_checked_path
+        } else {
+            path.to_string_lossy()
+        };
 
-        let temp_book = Book::new(entry.into_path());
-        books_vector.push(temp_book);
+        file_print_counter += 1;
+        println!("{}: {}", file_print_counter, file_display_path);
 
-        println!(" {}: {}", counter, path_to_processed_file);
-        counter += 1;
+        let xl_file = Book::new(entry.into_path());
+        xl_files_vec.push(xl_file);
     }
-    (books_vector, excluded_files_counter)
+
+    Ok(ExtractedXlBooks {
+        books: xl_files_vec,
+        file_count_excluded,
+    })
 }
