@@ -1,8 +1,8 @@
 use console::{Style, Term}; // для очистки консоли перед выводом полезных сообщений
 use std::env;
+use std::path;
 use std::thread; // для засыпания на секунду-две при печати сообщений
 use std::time::Duration; // для засыпания на секунду-две при печати сообщений // имя ".exe" будет присвоено файлу Excel
-use std::path;
 mod config;
 mod error;
 mod extract;
@@ -18,11 +18,13 @@ fn main() {
     ui::show_first_lines();
     ui::show_help();
     'main_loop: loop {
-        let (path, sh_name) = ui::user_input();
-        // let sh_name = "Лист1".to_owned();
+        let _ = Term::stdout().clear_screen();
+
+        let (path, user_entered_sh_name) = ui::user_input();
+        // Debug
+        // let user_entered_sh_name = "Лист1".to_owned();
         // let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
 
-        let sh_name_lowercase = sh_name.to_lowercase();
         let string_report_path = env::args()
             .next()
             .unwrap()
@@ -31,11 +33,9 @@ fn main() {
             + ".xlsx";
 
         let report_path = path::PathBuf::from(string_report_path);
-        // let file_stem_string = report_path.file_stem().unwrap().to_str().unwrap();
 
         let cyan = Style::new().cyan();
         let red = Style::new().red();
-        let _ = Term::stdout().clear_screen();
 
         let books_vec = match extract::get_vector_of_books(path) {
             Ok(vec) => vec,
@@ -57,7 +57,7 @@ fn main() {
                 let book = item.as_mut().unwrap();
                 let wrapped_sheet = Sheet::new(
                     book,
-                    &sh_name_lowercase,
+                    &user_entered_sh_name,
                     29, //передается для расчета смещения столбцов. Это сумма номеров столбцов Y-типа в DESIRED_DATA_ARRAY: 0 + 0 + 3 + 5 + 9 + 9 + 3.
                 );
 
@@ -96,15 +96,18 @@ fn main() {
             temp_acts_vec
         };
         // "При создании Report требуется передать вектор актов. Это связанно с тем, что xlsxwriter
-        // не умеет вставлять столбцы и не может переносить то, что им же записано (он не умеет читать Excel),
+        // не умеет вставлять столбцы и не может переносить то, что им же записано (не умеет читать Excel),
         // что навязывает необходимость установить общее количество
         // столбцов, и их порядок до того как начнется запись актов. Получается, на протяжении работы программы в Report
         // акты передаются дважды: при создании формы отчета для создания выборки всех названий, что встречаются в итогах,
         // а второй раз акт в Report будет передан циклом записи."
+
+        // очистка от временного сообщения
         let _ = Term::stdout().clear_last_lines(1);
         println!(
-            " Идет построение структуры excel в зависимости от содержания итогов актов, ожидайте..."
+            " Идет построение структуры excel-отчета в зависимости от содержания итогов актов, ожидайте..."
         );
+
         let mut report = Report::new(&report_path, &acts_vec).unwrap();
 
         let _ = Term::stdout().clear_last_lines(1);
@@ -147,6 +150,5 @@ fn main() {
         println!("\n Создан файл \"{}\"", report_path.display());
         thread::sleep(Duration::from_secs(1));
         println!("\n\n");
-        continue 'main_loop;
     }
 }

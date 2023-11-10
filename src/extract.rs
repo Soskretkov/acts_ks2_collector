@@ -81,11 +81,13 @@ impl<'a> Sheet {
         user_entered_sh_name: &'a str,
         expected_sum_of_requir_col: usize,
     ) -> Result<Sheet, Error<'a>> {
+        let entered_sh_name_lowercase = user_entered_sh_name.to_lowercase();
+
         let sheet_name = workbook
             .data
             .sheet_names()
             .iter()
-            .find(|name| name.to_lowercase() == user_entered_sh_name)
+            .find(|name| name.to_lowercase() == entered_sh_name_lowercase)
             .ok_or(Error::CalamineSheetOfTheBookIsUndetectable {
                 file_path: &workbook.path,
                 sh_name_for_search: user_entered_sh_name,

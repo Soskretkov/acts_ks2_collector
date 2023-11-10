@@ -52,7 +52,7 @@ fn inputting_path() -> String {
 
 fn entered_sheet_name() -> String {
     let _ = Term::stdout().clear_screen();
-    let temp_sh_name: String = Input::new()
+    let entered_sh_name: String = Input::new()
         .with_prompt(
             r#" Подтвердите лист или укажите другой.
  Не имеет значения, используете ли вы прописные или строчные буквы при указании листа.
@@ -61,7 +61,7 @@ fn entered_sheet_name() -> String {
         .with_initial_text("Лист1")
         .interact()
         .expect("Ошибка чтения ввода");
-    temp_sh_name
+    entered_sh_name
 }
 
 pub fn show_first_lines() {
