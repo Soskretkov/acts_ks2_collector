@@ -1,6 +1,8 @@
-use crate::extract::*;
 use calamine::DataType;
 use std::collections::HashMap;
+use crate::errors::Error;
+use crate::extract::{DesiredData, Sheet, DESIRED_DATA_ARRAY};
+use crate::constants::{BASE_PRICE_COLUMN_OFFSET, CURRENT_PRICE_COLUMN_OFFSET};
 
 #[derive(Debug, Clone)]
 pub enum DataVariant {
@@ -27,7 +29,7 @@ pub struct Act {
 }
 
 impl Act {
-    pub fn new(sheet: Sheet) -> Result<Act, String> {
+    pub fn new(sheet: Sheet) -> Result<Act, Error<'static>> {
         let header_addresses = Self::cells_addreses_in_header(&sheet.search_points);
         let data_of_header: Vec<Option<DataVariant>> = header_addresses
             .iter()
@@ -42,16 +44,19 @@ impl Act {
             })
             .collect();
 
+        let hmap_key = "стоимость материальных ресурсов (всего)";
         let (start_row_of_totals_in_range, start_col_of_totals_in_range) = *sheet
             .search_points
-            .get("стоимость материальных ресурсов (всего)")
-            .unwrap(); //unwrap не требует обработки
+            .get(hmap_key)
+            .ok_or_else(|| Error::InternalLogic {
+                tech_descr: format!("HashMap не содержит ключ: {}", hmap_key),
+                err: None,
+            })?;
 
         let data_of_totals = Self::get_totals(
             &sheet,
             (start_row_of_totals_in_range, start_col_of_totals_in_range),
-        )
-        .unwrap(); //unwrap не требует обработки: функция возвращает только Ok вариант
+        )?;
 
         let start_row_of_totals = start_row_of_totals_in_range + sheet.range_start.0 + 1;
         Ok(Act {
@@ -66,12 +71,13 @@ impl Act {
     fn cells_addreses_in_header(
         search_points: &HashMap<&'static str, (usize, usize)>,
     ) -> Vec<Option<(usize, usize)>> {
-        let stroika_adr = search_points.get("стройка").unwrap(); //unwrap не требует обработки
-        let object_adr = search_points.get("объект").unwrap(); //unwrap не требует обработки
-        let contrac_adr = search_points.get("договор подряда").unwrap(); //unwrap не требует обработки
-        let dopsogl_adr = search_points.get("доп. соглашение").unwrap(); //unwrap не требует обработки
-        let document_number_adr = search_points.get("номер документа").unwrap(); //unwrap не требует обработки
-        let workname_adr = search_points.get("наименование работ и затрат").unwrap(); //unwrap не требует обработки
+        //unwrap не требует обработки (валидировано)
+        let stroika_adr = search_points.get("стройка").unwrap();  
+        let object_adr = search_points.get("объект").unwrap();
+        let contrac_adr = search_points.get("договор подряда").unwrap();
+        let dopsogl_adr = search_points.get("доп. соглашение").unwrap();
+        let document_number_adr = search_points.get("номер документа").unwrap();
+        let workname_adr = search_points.get("наименование работ и затрат").unwrap();
 
         let temp_vec: Vec<Option<(usize, usize)>> = DESIRED_DATA_ARRAY.iter().fold(Vec::new(), |mut vec, shift| {
 
@@ -121,53 +127,58 @@ impl Act {
     fn get_totals(
         sheet: &Sheet,
         first_row_address: (usize, usize),
-    ) -> Result<Vec<TotalsRow>, String> {
+    ) -> Result<Vec<TotalsRow>, Error<'static>> {
         let (starting_row, starting_col) = first_row_address;
         let total_row = sheet.data.get_size().0;
-        let base_col = starting_col + 6;
-        let current_col = starting_col + 9;
+        let base_col = starting_col + BASE_PRICE_COLUMN_OFFSET;
+        let current_col = starting_col + CURRENT_PRICE_COLUMN_OFFSET;
 
-        let (_, temp_vec_row) = (starting_row..total_row).fold(
-            (false, Vec::<TotalsRow>::new()),
-            |(mut found_blank_row, mut acc), row| {
-                let wrapped_row_name = &sheet.data[(row, starting_col)];
-                if wrapped_row_name.is_string() {
-                    let base_price = &sheet.data[(row, base_col)];
-                    let current_price = &sheet.data[(row, current_col)];
+        let mut blank_row_flag = false;
+        let mut totals_row_vec = Vec::<TotalsRow>::new();
 
-                    //Если пустых ячеек вместо имени еще не встречалось, то собираем данные независимо от наличия цены.
-                    //Ситуация меняется если встретилось первое пустое имя: теперь потребуется и имя и цена (перестраховка на случай случайных пустых строк)
-                    if !found_blank_row || base_price.is_float() || current_price.is_float() {
-                        let row_name = wrapped_row_name
-                            .get_string()
-                            .unwrap()
-                            .trim()
-                            .replace("\r\n", "");
+        for row in starting_row..total_row {
+            let row_data_type = &sheet.data[(row, starting_col)];
+            if row_data_type.is_string() {
+                let base_price = &sheet.data[(row, base_col)];
+                let current_price = &sheet.data[(row, current_col)];
 
-                        match acc.iter_mut().find(|object| object.name == row_name) {
-                            Some(x) => {
-                                x.base_price.push(base_price.get_float());
-                                x.curr_price.push(current_price.get_float());
-                                x.row_number.push(sheet.range_start.0 + row + 1);
-                            }
-                            None => {
-                                let temp_total_row = TotalsRow {
-                                    name: row_name,
-                                    base_price: vec![base_price.get_float()],
-                                    curr_price: vec![current_price.get_float()],
-                                    row_number: vec![sheet.range_start.0 + row + 1],
-                                };
-                                acc.push(temp_total_row);
-                            }
+                //Если пустых ячеек вместо имени еще не встречалось, то собираем данные независимо от наличия цены.
+                //Ситуация меняется если встретилось первое пустое имя: теперь потребуется и имя и цена (перестраховка на случай случайных пустых строк)
+                if !blank_row_flag || base_price.is_float() || current_price.is_float() {
+                    let row_name = row_data_type
+                        .get_string()
+                        .ok_or_else(|| Error::InternalLogic {
+                            tech_descr: "При работе с ячейкой в итогах акта ожидался валидированный строковый тип данных Excel.".to_string(),
+                            err: None,
+                        })?
+                        .trim()
+                        .replace("\r\n", "");
+
+                    match totals_row_vec
+                        .iter_mut()
+                        .find(|object| object.name == row_name)
+                    {
+                        Some(x) => {
+                            x.base_price.push(base_price.get_float());
+                            x.curr_price.push(current_price.get_float());
+                            x.row_number.push(sheet.range_start.0 + row + 1);
+                        }
+                        None => {
+                            let temp_total_row = TotalsRow {
+                                name: row_name,
+                                base_price: vec![base_price.get_float()],
+                                curr_price: vec![current_price.get_float()],
+                                row_number: vec![sheet.range_start.0 + row + 1],
+                            };
+                            totals_row_vec.push(temp_total_row);
                         }
                     }
-                } else if !found_blank_row {
-                    found_blank_row = true;
                 }
-                (found_blank_row, acc)
-            },
-        );
+            } else if !blank_row_flag {
+                blank_row_flag = true;
+            }
+        }
 
-        Ok(temp_vec_row)
+        Ok(totals_row_vec)
     }
 }

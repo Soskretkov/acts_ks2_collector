@@ -1,5 +1,6 @@
-use crate::config::XL_FILE_EXTENSION;
+use crate::constants::XL_FILE_EXTENSION;
 use crate::errors::Error;
+use crate::ui;
 use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
 use std::collections::HashMap;
 use std::fs::File;
@@ -13,8 +14,10 @@ pub enum Required {
     N,
 }
 
-// В кортеже первое значение это смещение от первого столбца до столбца, содержащего указанный литерал. В виде "магических цифр" запись вышла более читаемая.
-// Литералы маленькими буквами из-за того что, например, "Доп. соглашение" Excel переведет в "Доп. Соглашение" если встать в ячейку и нажать Enter. Перестраховка от сюрпризов
+// В кортеже первое значение это смещение от первого столбца до столбца, содержащего указанный литерал.
+// Представление в виде "магических цифр" удобнее конфигурировать.
+// Литералы маленькими буквами из-за перестраховки от сюрпризов в виду того что это поисковые теги,
+// например, "Доп. соглашение" Excel переведет в "Доп. Соглашение" если встать в ячейку и нажать Enter.
 pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 10] = [
     (0, Required::N, "исполнитель"),
     (0, Required::Y, "стройка"),
@@ -221,10 +224,6 @@ pub fn extract_xl_books(path: &PathBuf) -> (Result<ExtractedXlBooks, Error<'stat
         })
         .collect();
 
-    if files.len() > 0 {
-        println!("\nОтбранные файлы:");
-    }
-
     let mut xl_files_vec = vec![];
     let mut file_count_excluded = 0;
     let mut file_print_counter = 0;
@@ -250,6 +249,10 @@ pub fn extract_xl_books(path: &PathBuf) -> (Result<ExtractedXlBooks, Error<'stat
             }
         }
 
+        if xl_files_vec.len() == 0 {
+            ui::display_formatted_text("\nОтбранны файлы:", None);
+        }
+
         let file_display_path = if path.is_dir() {
             file_checked_path
         } else {
@@ -257,7 +260,8 @@ pub fn extract_xl_books(path: &PathBuf) -> (Result<ExtractedXlBooks, Error<'stat
         };
 
         file_print_counter += 1;
-        println!("{}: {}", file_print_counter, file_display_path);
+        let msg = format!("{}: {}", file_print_counter, file_display_path);
+        ui::display_formatted_text(&msg, None);
 
         let xl_file = Book::new(entry.into_path());
         xl_files_vec.push(xl_file);

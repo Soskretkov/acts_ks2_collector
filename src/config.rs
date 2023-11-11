@@ -1,1 +1,0 @@
-pub const XL_FILE_EXTENSION: &str = ".xlsm";

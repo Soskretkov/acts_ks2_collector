@@ -1,4 +1,5 @@
-use console::Term;
+use crate::constants::CONSOLE_LEFT_MARGIN_IN_SPACES;
+use console::{Style, Term};
 use dialoguer::Input;
 use std::io;
 use std::path::PathBuf;
@@ -30,7 +31,7 @@ pub fn user_input() -> (PathBuf, String) {
                 .count()
                     > 4 =>
             {
-                show_details();
+                display_details();
                 thread::sleep(Duration::from_secs(2));
                 continue;
             }
@@ -39,8 +40,68 @@ pub fn user_input() -> (PathBuf, String) {
     }
 }
 
+pub fn display_first_lines(is_visible: bool) {
+    let optional_text = if is_visible {
+        "       Введите  \"details\"  для получения подробностей о программе."
+    } else {
+        ""
+    };
+
+    let msg = format!("\n{optional_text}\n");
+    display_formatted_text(&msg, None);
+}
+
+pub fn display_help() {
+    let msg = format!(
+        r#"------------------------------------------------------------------------------------------------------------
+
+● Используйте CTRL + V, чтобы вставить скопированный путь к папке или файлу с данными, которые вы хотите собрать.");
+● Программа будет собирать данные из файлов Excel по указанному пути, включая вложенные папки.");
+● Собираются только файлы с расширением «.xlsm».");
+● Полезный совет:
+    - переименуйте файл Excel, добавив символ «@», и программа не будет собирать его данные;");
+    - переименуйте папку, добавив символ «@», и программа проигнорирует ее содержимое.
+
+------------------------------------------------------------------------------------------------------------"#
+    );
+
+    display_formatted_text(&msg, None);
+}
+
+pub fn display_formatted_text(text: &str, text_style: Option<Style>) {
+    let formatted_text = prepend_spaces_to_non_empty_lines(text);
+
+    match text_style {
+        Some(style) => println!("{}", style.apply_to(formatted_text)),
+        None => println!("{}", formatted_text),
+    }
+}
+
+fn display_details() {
+    // Очистка прошлых сообщений
+    let _ = Term::stdout().clear_screen();
+    display_first_lines(false);
+    display_help();
+
+    let msg = format!(
+        r#"
+            Наименование продукта:        «Сборщик данных из актов формы \"КС-2\"»
+            Версия продукта:              {}
+            Дата основания проекта:       02.06.2022
+            Адрес на GitHub.com:          https://github.com/Soskretkov/ks2_etl
+            Автор:                        Оскретков Сергей Юрьевич
+            Специально для: ООО «Трест Росспецэнергомонтаж»,
+            Альтуфьевское шоссе, д. 43, стр. 1, Москва, 127410,
+            Cметно-договорное управление.
+
+------------------------------------------------------------------------------------------------------------"#,
+        env!("CARGO_PKG_VERSION")
+    );
+    display_formatted_text(&msg, None);
+}
+
 fn inputting_path() -> String {
-    println!("\nВведите путь:");
+    display_formatted_text("Введите путь:", None);
     let mut text = String::new();
     io::stdin()
         .read_line(&mut text)
@@ -52,48 +113,31 @@ fn inputting_path() -> String {
 
 fn entered_sheet_name() -> String {
     let _ = Term::stdout().clear_screen();
+    let msg = prepend_spaces_to_non_empty_lines(
+        "Подтвердите лист или укажите другой.
+    Не имеет значения, используете ли вы прописные или строчные буквы при указании листа.
+    Имя листа",
+    );
     let entered_sh_name: String = Input::new()
-        .with_prompt(
-            r#"Подтвердите лист или укажите другой.
-Не имеет значения, используете ли вы прописные или строчные буквы при указании листа.
-Имя листа"#,
-        )
+        .with_prompt(msg)
         .with_initial_text("Лист1")
         .interact()
         .expect("Ошибка чтения ввода");
+
+    let _ = Term::stdout().clear_screen();
     entered_sh_name
 }
 
-pub fn show_first_lines() {
-    println!("        Введите  \"details\"  для получения подробностей о программе.\n");
-}
-#[rustfmt::skip]
-pub fn show_help() {
-    println!("------------------------------------------------------------------------------------------------------------\n");
-    println!(" ● Используйте CTRL + V, чтобы вставить скопированный путь к папке или файлу с данными, которые вы хотите собрать.");
-    println!(" ● Программа будет собирать данные из файлов Excel по указанному пути, включая вложенные папки.");
-    println!(" ● Собираются только файлы с расширением «.xlsm».");
-    println!(" ● Полезный совет:\n     - переименуйте файл Excel, добавив символ «@», и программа не будет собирать его данные;");
-    println!("     - переименуйте папку, добавив символ «@», и программа проигнорирует ее содержимое.");
-    println!("\n------------------------------------------------------------------------------------------------------------");
-}
-#[rustfmt::skip]
-fn show_details() {
-    // Очистка прошлых сообщений
-    let _ = Term::stdout().clear_screen();
-    println!("\n");
-    show_help();
-
-    println!("");
-    println!("            Наименование продукта:        «Сборщик данных из актов формы \"КС-2\"»");
-    println!("            Версия продукта:              {}", env!("CARGO_PKG_VERSION"));
-    println!("            Дата основания проекта:       02.06.2022");
-    println!("            Адрес на GitHub.com:          https://github.com/Soskretkov/ks2_etl");
-    println!("            Автор:                        Оскретков Сергей Юрьевич\n");
-    println!("            Специально для: ООО «Трест Росспецэнергомонтаж»,");
-    println!("            Альтуфьевское шоссе, д. 43, стр. 1, Москва, 127410,");
-    println!("            Cметно-договорное управление.");
-    println!(
-        "\n------------------------------------------------------------------------------------------------------------"
-    );
+fn prepend_spaces_to_non_empty_lines(text: &str) -> String {
+    let spaces = " ".repeat(CONSOLE_LEFT_MARGIN_IN_SPACES);
+    text.lines()
+        .map(|line| {
+            if !line.trim().is_empty() {
+                format!("{}{}", spaces, line)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<String>>()
+        .join("\n")
 }
