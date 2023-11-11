@@ -10,7 +10,6 @@ pub enum Error<'a> {
         tech_descr: String,
         err: Option<Box<dyn std::error::Error>>,
     },
-    NoFilesInSpecifiedPath(PathBuf),
     CalamineSheetOfTheBookIsUndetectable {
         file_path: &'a PathBuf,
         sh_name_for_search: &'a str,
@@ -58,14 +57,6 @@ impl fmt::Display for Error<'_> {
                 let full_msg = format!("{base_msg}{footer_msg}");
 
                 write!(f, "{full_msg}")
-            }
-            Self::NoFilesInSpecifiedPath(path) => {
-                let path = path.display();
-                let msg = format!(
-                    r#"Нет файлов с расширением "{XL_FILE_EXTENSION}" по указанному пути:
-{path}"#
-                );
-                write!(f, "{msg}")
             }
             Self::CalamineSheetOfTheBookIsUndetectable {
                 file_path,

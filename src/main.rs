@@ -9,7 +9,7 @@ mod extract;
 mod load;
 mod transform;
 mod ui;
-use crate::constants::XL_FILE_EXTENSION;
+use crate::constants::{SUCCESS_PAUSE_DURATION, XL_FILE_EXTENSION};
 use crate::errors::Error;
 use crate::extract::Sheet;
 use crate::load::Report;
@@ -19,6 +19,8 @@ fn main() {
     Term::stdout().set_title("«Ks2 etl»,  v".to_string() + env!("CARGO_PKG_VERSION"));
     ui::display_first_lines(true);
     ui::display_help();
+    let cyan = Style::new().cyan();
+    let red = Style::new().red();
     'main_loop: loop {
         println!("\n");
 
@@ -37,10 +39,6 @@ fn main() {
         let report_path = path::PathBuf::from(string_report_path);
 
         let wraped_books_vec = extract::extract_xl_books(&path).and_then(|extracted_xl_books| {
-            if extracted_xl_books.books.len() == 0 {
-                return Err(Error::NoFilesInSpecifiedPath(path));
-            }
-
             if path.is_dir() {
                 let file_count_total =
                     extracted_xl_books.books.len() + extracted_xl_books.file_count_excluded;
@@ -58,7 +56,15 @@ fn main() {
                     "Среди них нет файлов, помеченных как исключенные.".to_string()
                 };
 
-                let full_msg = format!("\n{base_msg}\n{footer_msg}");
+                let full_msg = format!(
+                    "\n{}\n{}",
+                    base_msg,
+                    if file_count_total == 0 {
+                        "".to_string()
+                    } else {
+                        footer_msg
+                    }
+                );
 
                 ui::display_formatted_text(&full_msg, None);
             }
@@ -73,6 +79,12 @@ fn main() {
                 continue 'main_loop;
             }
         };
+
+        if books_vec.len() == 0 {
+            ui::display_formatted_text("Нет файлов к сбору.", Some(&red));
+            thread::sleep(Duration::from_secs(SUCCESS_PAUSE_DURATION));
+            continue 'main_loop;
+        }
 
         let acts_vec = {
             let mut temp_acts_vec = Vec::new();
@@ -139,8 +151,7 @@ fn main() {
         }
 
         let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что идет запись
-        let cyan = Style::new().cyan();
-        ui::display_formatted_text("\nУспешно выполнено.", Some(cyan));
+        ui::display_formatted_text("\nУспешно выполнено.", Some(&cyan));
 
         let footer_msg = format!(
             "Собрано {} файла(ов).\nСоздан файл \"{}\"",
@@ -148,14 +159,14 @@ fn main() {
             report_path.display()
         );
         ui::display_formatted_text(&footer_msg, None);
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(SUCCESS_PAUSE_DURATION));
         continue 'main_loop;
     }
 }
 
 fn display_error_and_wait(err: Error<'_>) {
     let red = Style::new().red();
-    ui::display_formatted_text("\nВозникла ошибка.", Some(red));
+    ui::display_formatted_text("\nВозникла ошибка.", Some(&red));
 
     let error_message = format!("\n{}", &err.to_string());
     ui::display_formatted_text(&error_message, None);

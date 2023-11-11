@@ -68,7 +68,7 @@ pub fn display_help() {
     display_formatted_text(&msg, None);
 }
 
-pub fn display_formatted_text(text: &str, text_style: Option<Style>) {
+pub fn display_formatted_text(text: &str, text_style: Option<&Style>) {
     let formatted_text = prepend_spaces_to_non_empty_lines(text);
 
     match text_style {
