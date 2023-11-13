@@ -1,8 +1,35 @@
 use calamine::DataType;
 use std::collections::HashMap;
 use crate::errors::Error;
-use crate::extract::{DesiredData, Sheet, DESIRED_DATA_ARRAY};
+use crate::extract::Sheet;
 use crate::constants::{BASE_PRICE_COLUMN_OFFSET, CURRENT_PRICE_COLUMN_OFFSET};
+
+
+#[derive(Debug, Clone)]
+pub struct DesiredData {
+    pub name: &'static str,
+    pub offset: Option<(&'static str, (i8, i8))>,
+}
+
+#[rustfmt::skip]
+const DESIRED_DATA_ARRAY: [DesiredData; 16] = [
+    DesiredData{name:"Исполнитель",                  offset: None},
+    DesiredData{name:"Глава",                        offset: None},
+    DesiredData{name:"Глава наименование",           offset: None},
+    DesiredData{name:"Объект",                       offset: Some(("объект",                         (0, 3)))},
+    DesiredData{name:"Договор №",                    offset: Some(("договор подряда",                (0, 2)))},
+    DesiredData{name:"Договор дата",                 offset: Some(("договор подряда",                (1, 2)))},
+    DesiredData{name:"Смета №",                      offset: Some(("договор подряда",                (0, -9)))},
+    DesiredData{name:"Смета наименование",           offset: Some(("договор подряда",                (1, -9)))},
+    DesiredData{name:"По смете в ц.2000г.",          offset: Some(("доп. соглашение",                (0, -4)))},
+    DesiredData{name:"Выполнение работ в ц.2000г.",  offset: Some(("доп. соглашение",                (1, -4)))},
+    DesiredData{name:"Акт №",                        offset: Some(("номер документа",                (2, 0)))},
+    DesiredData{name:"Акт дата",                     offset: Some(("номер документа",                (2, 4)))},
+    DesiredData{name:"Отчетный период начало",       offset: Some(("номер документа",                (2, 5)))},
+    DesiredData{name:"Отчетный период окончание",    offset: Some(("номер документа",                (2, 6)))},
+    DesiredData{name:"Метод расчета",                offset: Some(("наименование работ и затрат",    (-1, -3)))},
+    DesiredData{name:"Затраты труда, чел.-час",      offset: None},
+];
 
 #[derive(Debug, Clone)]
 pub enum DataVariant {

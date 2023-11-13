@@ -8,53 +8,35 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
-#[derive(PartialEq)]
-pub enum Required {
-    Y,
-    N,
+enum Column {
+    Initial,
+    Contract,
+}
+enum Row {
+    TableHeader,
 }
 
-// В кортеже первое значение это значение валидации смещения от первого столбца до столбца,
-// содержащего указанный литерал. Представление в виде "магических цифр" удобнее конфигурировать.
-// Литералы маленькими буквами из-за перестраховки от сюрпризов т.е. это поисковые теги,
-// например, "Доп. соглашение" Excel переведет в "Доп. Соглашение" если встать в ячейку и нажать Enter.
-pub const SEARCH_REFERENCE_POINTS: [(usize, Required, &str); 10] = [
-    (0, Required::N, "исполнитель"),
-    (0, Required::Y, "стройка"),
-    (0, Required::Y, "объект"),
-    (9, Required::Y, "договор подряда"),
-    (9, Required::Y, "доп. соглашение"),
-    (5, Required::Y, "номер документа"),
-    (3, Required::Y, "наименование работ и затрат"),
-    (11, Required::N, "зтр всего чел.-час"),
-    (0, Required::N, "итого по акту:"),
-    (3, Required::Y, "стоимость материальных ресурсов (всего)"),
-];
-
-#[derive(Debug, Clone)]
-pub struct DesiredData {
-    pub name: &'static str,
-    pub offset: Option<(&'static str, (i8, i8))>,
+struct SearchTag {
+    tag: &'static str,
+    is_required: bool,
+    group_by_row: Option<Row>,
+    group_by_col: Option<Column>,
 }
 
+// перечислены в порядке вхождения слева на право и сверху вниз на листе Excel (вход по строкам важен для валидации)
+// группировка по строке и столбцу для валидации в будующих версиях программы (не реализовано)
 #[rustfmt::skip]
-pub const DESIRED_DATA_ARRAY: [DesiredData; 16] = [
-    DesiredData{name:"Исполнитель",                  offset: None},
-    DesiredData{name:"Глава",                        offset: None},
-    DesiredData{name:"Глава наименование",           offset: None},
-    DesiredData{name:"Объект",                       offset: Some(("объект",                         (0, 3)))},
-    DesiredData{name:"Договор №",                    offset: Some(("договор подряда",                (0, 2)))},
-    DesiredData{name:"Договор дата",                 offset: Some(("договор подряда",                (1, 2)))},
-    DesiredData{name:"Смета №",                      offset: Some(("договор подряда",                (0, -9)))},
-    DesiredData{name:"Смета наименование",           offset: Some(("договор подряда",                (1, -9)))},
-    DesiredData{name:"По смете в ц.2000г.",          offset: Some(("доп. соглашение",                (0, -4)))},
-    DesiredData{name:"Выполнение работ в ц.2000г.",  offset: Some(("доп. соглашение",                (1, -4)))},
-    DesiredData{name:"Акт №",                        offset: Some(("номер документа",                (2, 0)))},
-    DesiredData{name:"Акт дата",                     offset: Some(("номер документа",                (2, 4)))},
-    DesiredData{name:"Отчетный период начало",       offset: Some(("номер документа",                (2, 5)))},
-    DesiredData{name:"Отчетный период окончание",    offset: Some(("номер документа",                (2, 6)))},
-    DesiredData{name:"Метод расчета",                offset: Some(("наименование работ и затрат",    (-1, -3)))},
-    DesiredData{name:"Затраты труда, чел.-час",      offset: None},
+const SEARCH_TAGS: [SearchTag; 10] = [
+    SearchTag { is_required: false, group_by_row: None, group_by_col: Some(Column::Initial),  tag: "исполнитель" },
+    SearchTag { is_required: true, group_by_row: None, group_by_col: Some(Column::Initial),  tag: "стройка" },
+    SearchTag { is_required: true, group_by_row: None, group_by_col: Some(Column::Initial),  tag: "объект" },
+    SearchTag { is_required: true, group_by_row: None, group_by_col:Some(Column::Contract),  tag: "договор подряда" },
+    SearchTag { is_required: true, group_by_row:  None, group_by_col:Some(Column::Contract), tag: "доп. соглашение" },
+    SearchTag { is_required: true, group_by_row:  None, group_by_col: None, tag: "номер документа" },
+    SearchTag { is_required: true, group_by_row:  Some(Row::TableHeader), group_by_col: None, tag: "наименование работ и затрат" },
+    SearchTag { is_required: false, group_by_row:  Some(Row::TableHeader), group_by_col: None, tag: "зтр всего чел.-час" },
+    SearchTag { is_required: false, group_by_row:  None, group_by_col: Some(Column::Initial), tag: "итого по акту:" },
+    SearchTag { is_required: true, group_by_row:  None, group_by_col: None, tag: "стоимость материальных ресурсов (всего)" },
 ];
 
 pub struct ExtractedXlBooks {
@@ -89,7 +71,7 @@ impl<'a> Sheet {
         // (из-за мутабельности workbook проблема при попытке множественных ссылок: можно только клонировать)
         workbook: &'a mut Book,
         user_entered_sh_name: &'a str,
-        expected_sum_of_requir_col: usize,
+        expected_columns_sum: usize,
     ) -> Result<Sheet, Error<'a>> {
         let entered_sh_name_lowercase = user_entered_sh_name.to_lowercase();
 
@@ -121,8 +103,7 @@ impl<'a> Sheet {
                 })
             })?;
 
-        // это номера строки и столбца, с которых начинается диапазон данных листа
-        // при ошибки передается точное имя листа (с учетом регистра, в отличии от имени, введеного пользователем)
+        // при ошибки передается точное имя листа с учетом регистра (не используем ввод пользователя)
         let sheet_start_coords = xl_sheet.start().ok_or(Error::EmptySheetRange {
             file_path: &workbook.path,
             sh_name: sheet_name.to_owned(),
@@ -130,73 +111,76 @@ impl<'a> Sheet {
 
         let mut search_points = HashMap::new();
 
-        let mut temp_sh_iter = xl_sheet.used_cells();
-        let mut temp;
-        for item in SEARCH_REFERENCE_POINTS {
-            match item.1 {
-                // Для Y-типов подходит расходуемый итератор - достигается проверка по очередности вохождения слов по строкам
-                // (т.е. "Стройку" мы ожидаем выше "Объекта, например")
-                Required::Y => {
-                    temp = temp_sh_iter.find(|x| {
-                        x.2.get_string()
-                            .as_ref()
-                            .unwrap_or_else(|| &"")
-                            .to_lowercase()
-                            == item.2
-                    });
-                }
-                // Для N-типов нельзя использовать расходуемые итераторы, так как необязательное значение может и отсутсвовать (и при его поиске израсходуется итератор)
-                Required::N => {
-                    temp = xl_sheet.used_cells().find(|x| {
-                        x.2.get_string()
-                            .as_ref()
-                            .unwrap_or_else(|| &"")
-                            .to_lowercase()
-                            == item.2
-                    });
-                }
-            }
+        let mut limited_cell_iterator = xl_sheet.used_cells();
+        let mut found_cell;
+        for item in SEARCH_TAGS {
+            let mut non_limited_cell_iterator = xl_sheet.used_cells();
 
-            if let Some((row, col, _)) = temp {
-                search_points.insert(item.2, (row, col));
+            // Для обязательных тегов расходуемый итератор обеспечит валидацию очередности вохождения тегов
+            // (например, "Стройку" мы ожидаем выше "Объекта, не наоборот).
+            // Необязательным тегам расходуемый итератор не подходит, т.к. необязательный тег при отсутсвии израсходует итератор
+            let iterator = if item.is_required {
+                &mut limited_cell_iterator
+            } else {
+                &mut non_limited_cell_iterator
+            };
+
+            found_cell = iterator.find(|cell| match cell.2.get_string() {
+                Some(str) => {
+                    //  println!("{}   {}    {}", str.eq_ignore_ascii_case(item.tag), str, item.tag);
+
+                    str.to_lowercase() == item.tag},
+                None => false,
+            });
+
+            if let Some((row, col, _)) = found_cell {
+                search_points.insert(item.tag, (row, col));
             }
         }
 
-        // Проверка на полноту данных
-        let test = SEARCH_REFERENCE_POINTS
+        // Валидация на полноту данных: выше итератор расходующий ячейки и если хоть один поиск провалился, то это преждевременно
+        // потребит все ячейки и извлечение по тегу последней строки в SEARCH_TAGS гарантированно провалится
+        let validation_tag = SEARCH_TAGS
             .iter()
-            .filter(|x| x.1 == Required::Y)
+            .filter(|search_tag| search_tag.is_required)
             .last()
-            .unwrap_or_else(|| panic!("ложь: \"DESIRED_DATA_ARRAY всегда имеет значения\""))
-            .2;
+            .ok_or_else(|| Error::InternalLogic {
+                tech_descr: "SEARCH_TAGS пуст".to_string(),
+                err: None,
+            })?
+            .tag;
 
         search_points
-            .get(test)
-            .ok_or(Error::SheetNotContainAllNecessaryData(&workbook.path))?;
+            .get(validation_tag)
+            .ok_or(Error::SheetNotContainAllNecessaryData {
+                file_path: &workbook.path,
+                search_points: search_points.clone(),
+            })?;
 
         // Проверка значений на удаленность столбцов, чтобы гарантировать что найден нужный лист.
-        let first_col = search_points
+        let initial_column_coords = search_points
             .get("стройка")
             .unwrap_or_else(|| panic!("ложь: \"Необеспечены действительные имена HashMap\""));
 
-        let (just_a_amount_requir_col, just_a_sum_requir_col) = SEARCH_REFERENCE_POINTS
-            .iter()
-            .fold((0_usize, 0), |acc, item| match item.1 {
-                Required::Y => (
-                    acc.0 + 1,
-                    acc.1
-                        + search_points
-                            .get(item.2)
-                            .unwrap_or_else(|| {
-                                panic!("ложь: \"Необеспечены действительные имена HashMap\"")
-                            })
-                            .1,
-                ),
-                _ => acc,
-            });
+        let (just_a_amount_requir_col, just_a_sum_requir_col) =
+            SEARCH_TAGS
+                .iter()
+                .fold((0_usize, 0), |acc, item| match item.is_required {
+                    true => (
+                        acc.0 + 1,
+                        acc.1
+                            + search_points
+                                .get(item.tag)
+                                .unwrap_or_else(|| {
+                                    panic!("ложь: \"Необеспечены действительные имена HashMap\"")
+                                })
+                                .1,
+                    ),
+                    false => acc,
+                });
 
-        if let false = just_a_sum_requir_col - first_col.1 * just_a_amount_requir_col
-            == expected_sum_of_requir_col
+        if let false = just_a_sum_requir_col - initial_column_coords.1 * just_a_amount_requir_col
+            == expected_columns_sum
         {
             return Err(Error::ShiftedColumnsInHeader(&workbook.path));
         }
