@@ -1,8 +1,6 @@
 use crate::constants::XL_FILE_EXTENSION;
 use std::fmt;
 use std::path::PathBuf;
-// pub mod _internal_logic_type;
-// pub use _internal_logic_type::InternalLogicType;
 
 #[derive(Debug)]
 pub enum Error<'a> {
