@@ -11,7 +11,7 @@ mod transform;
 mod ui;
 use crate::constants::{SUCCESS_PAUSE_DURATION, XL_FILE_EXTENSION};
 use crate::errors::Error;
-use crate::extract::Sheet;
+use crate::extract::{ExtractedXlBooks, Sheet};
 use crate::load::Report;
 use crate::transform::Act;
 
@@ -38,7 +38,7 @@ fn main() {
 
         let report_path = path::PathBuf::from(string_report_path);
 
-        let wraped_books_vec = extract::extract_xl_books(&path).and_then(|extracted_xl_books| {
+        let wraped_books_vec = ExtractedXlBooks::new(&path).and_then(|extracted_xl_books| {
             if path.is_dir() {
                 let file_count_total =
                     extracted_xl_books.books.len() + extracted_xl_books.file_count_excluded;
