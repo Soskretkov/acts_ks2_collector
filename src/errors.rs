@@ -1,4 +1,4 @@
-use crate::constants::XL_FILE_EXTENSION;
+use crate::types::TagID;
 use std::fmt;
 use std::path::PathBuf;
 use std::collections::HashMap;
@@ -26,7 +26,7 @@ pub enum Error<'a> {
     ShiftedColumnsInHeader(&'a PathBuf),
     SheetNotContainAllNecessaryData {
         file_path: &'a PathBuf,
-        search_points: HashMap<&'static str, (usize, usize)>,
+        search_points: HashMap<TagID, (usize, usize)>,
     },
     XlsxwriterWorkbookCreation {
         wb_name: &'a str,

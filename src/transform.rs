@@ -1,5 +1,6 @@
 use calamine::DataType;
 use std::collections::HashMap;
+use crate::types::TagID;
 use crate::errors::Error;
 use crate::extract::Sheet;
 use crate::constants::{BASE_PRICE_COLUMN_OFFSET, CURRENT_PRICE_COLUMN_OFFSET};
@@ -8,7 +9,7 @@ use crate::constants::{BASE_PRICE_COLUMN_OFFSET, CURRENT_PRICE_COLUMN_OFFSET};
 #[derive(Debug, Clone)]
 pub struct DesiredData {
     pub name: &'static str,
-    pub offset: Option<(&'static str, (i8, i8))>,
+    pub offset: Option<(TagID, (i8, i8))>,
 }
 
 #[rustfmt::skip]
@@ -16,18 +17,18 @@ const DESIRED_DATA_ARRAY: [DesiredData; 16] = [
     DesiredData{name:"Исполнитель",                  offset: None},
     DesiredData{name:"Глава",                        offset: None},
     DesiredData{name:"Глава наименование",           offset: None},
-    DesiredData{name:"Объект",                       offset: Some(("объект",                         (0, 3)))},
-    DesiredData{name:"Договор №",                    offset: Some(("договор подряда",                (0, 2)))},
-    DesiredData{name:"Договор дата",                 offset: Some(("договор подряда",                (1, 2)))},
-    DesiredData{name:"Смета №",                      offset: Some(("договор подряда",                (0, -9)))},
-    DesiredData{name:"Смета наименование",           offset: Some(("договор подряда",                (1, -9)))},
-    DesiredData{name:"По смете в ц.2000г.",          offset: Some(("доп. соглашение",                (0, -4)))},
-    DesiredData{name:"Выполнение работ в ц.2000г.",  offset: Some(("доп. соглашение",                (1, -4)))},
-    DesiredData{name:"Акт №",                        offset: Some(("номер документа",                (2, 0)))},
-    DesiredData{name:"Акт дата",                     offset: Some(("номер документа",                (2, 4)))},
-    DesiredData{name:"Отчетный период начало",       offset: Some(("номер документа",                (2, 5)))},
-    DesiredData{name:"Отчетный период окончание",    offset: Some(("номер документа",                (2, 6)))},
-    DesiredData{name:"Метод расчета",                offset: Some(("наименование работ и затрат",    (-1, -3)))},
+    DesiredData{name:"Объект",                       offset: Some((TagID::Объект,                   (0, 3)))},
+    DesiredData{name:"Договор №",                    offset: Some((TagID::ДоговорПодряда,           (0, 2)))},
+    DesiredData{name:"Договор дата",                 offset: Some((TagID::ДоговорПодряда,           (1, 2)))},
+    DesiredData{name:"Смета №",                      offset: Some((TagID::ДоговорПодряда,           (0, -9)))},
+    DesiredData{name:"Смета наименование",           offset: Some((TagID::ДоговорПодряда,           (1, -9)))},
+    DesiredData{name:"По смете в ц.2000г.",          offset: Some((TagID::ДопСоглашение,            (0, -4)))},
+    DesiredData{name:"Выполнение работ в ц.2000г.",  offset: Some((TagID::ДопСоглашение,            (1, -4)))},
+    DesiredData{name:"Акт №",                        offset: Some((TagID::НомерДокумента,           (2, 0)))},
+    DesiredData{name:"Акт дата",                     offset: Some((TagID::НомерДокумента,           (2, 4)))},
+    DesiredData{name:"Отчетный период начало",       offset: Some((TagID::НомерДокумента,           (2, 5)))},
+    DesiredData{name:"Отчетный период окончание",    offset: Some((TagID::НомерДокумента,           (2, 6)))},
+    DesiredData{name:"Метод расчета",                offset: Some((TagID::НаименованиеРаботИЗатрат, (-1, -3)))},
     DesiredData{name:"Затраты труда, чел.-час",      offset: None},
 ];
 
@@ -71,12 +72,11 @@ impl Act {
             })
             .collect();
 
-        let hmap_key = "стоимость материальных ресурсов (всего)";
         let (start_row_of_totals_in_range, start_col_of_totals_in_range) = *sheet
             .search_points
-            .get(hmap_key)
+            .get(&TagID::СтоимостьМатериальныхРесурсовВсего)
             .ok_or_else(|| Error::InternalLogic {
-                tech_descr: format!("HashMap не содержит ключ: {}", hmap_key),
+                tech_descr: format!("HashMap не содержит ключ: {}", TagID::СтоимостьМатериальныхРесурсовВсего.as_str()),
                 err: None,
             })?;
 
@@ -96,32 +96,32 @@ impl Act {
         })
     }
     fn cells_addreses_in_header(
-        search_points: &HashMap<&'static str, (usize, usize)>,
+        search_points: &HashMap<TagID, (usize, usize)>,
     ) -> Vec<Option<(usize, usize)>> {
         //unwrap не требует обработки (валидировано)
-        let stroika_adr = search_points.get("стройка").unwrap();  
-        let object_adr = search_points.get("объект").unwrap();
-        let contrac_adr = search_points.get("договор подряда").unwrap();
-        let dopsogl_adr = search_points.get("доп. соглашение").unwrap();
-        let document_number_adr = search_points.get("номер документа").unwrap();
-        let workname_adr = search_points.get("наименование работ и затрат").unwrap();
+        let stroika_adr = search_points.get(&TagID::Стройка).unwrap();  
+        let object_adr = search_points.get(&TagID::Объект).unwrap();
+        let contrac_adr = search_points.get(&TagID::ДоговорПодряда).unwrap();
+        let dopsogl_adr = search_points.get(&TagID::ДопСоглашение).unwrap();
+        let document_number_adr = search_points.get(&TagID::НомерДокумента).unwrap();
+        let workname_adr = search_points.get(&TagID::НаименованиеРаботИЗатрат).unwrap();
 
         let temp_vec: Vec<Option<(usize, usize)>> = DESIRED_DATA_ARRAY.iter().fold(Vec::new(), |mut vec, shift| {
 
                 let temp_cells_address: Option<(usize, usize)> = match shift {
-                    DesiredData{name: _, offset: Some((point_name, (row, col)))} => {
-                        let temp = match *point_name {
-                            "объект" => ((object_adr.0 as isize + *row as isize) as usize, (object_adr.1 as isize + *col as isize) as usize),
-                            "договор подряда" => ((contrac_adr.0 as isize + *row as isize) as usize, (contrac_adr.1 as isize + *col as isize) as usize),
-                            "доп. соглашение" => ((dopsogl_adr.0 as isize + *row as isize) as usize, (dopsogl_adr.1 as isize + *col as isize) as usize),
-                            "номер документа" => ((document_number_adr.0 as isize + *row as isize) as usize, (document_number_adr.1 as isize + *col as isize) as usize),
-                            "наименование работ и затрат" => ((workname_adr.0 as isize + *row as isize) as usize, (workname_adr.1 as isize + *col as isize) as usize),
-                            _ => unreachable!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: ячейка в Excel с содержимым '{}' будет причиной подобных ошибок, пока не станет типом Required::Y, подлежащим обработке", point_name),
+                    DesiredData{name: _, offset: Some((tag_id, (row, col)))} => {
+                        let temp = match *tag_id {
+                            TagID::Объект => ((object_adr.0 as isize + *row as isize) as usize, (object_adr.1 as isize + *col as isize) as usize),
+                            TagID::ДоговорПодряда => ((contrac_adr.0 as isize + *row as isize) as usize, (contrac_adr.1 as isize + *col as isize) as usize),
+                            TagID::ДопСоглашение => ((dopsogl_adr.0 as isize + *row as isize) as usize, (dopsogl_adr.1 as isize + *col as isize) as usize),
+                            TagID::НомерДокумента => ((document_number_adr.0 as isize + *row as isize) as usize, (document_number_adr.1 as isize + *col as isize) as usize),
+                            TagID::НаименованиеРаботИЗатрат => ((workname_adr.0 as isize + *row as isize) as usize, (workname_adr.1 as isize + *col as isize) as usize),
+                            _ => unreachable!("Ошибка в логике программы: вариант '{}' отсутствует в качестве рукава match", tag_id.as_str()),
                         };
                         Some(temp)
                     },
                     DesiredData{name: content, ..} => match *content {
-                        "Исполнитель" => search_points.get("исполнитель").map(|(row, col)| (*row, *col + 3)),
+                        "Исполнитель" => search_points.get(&TagID::Исполнитель).map(|(row, col)| (*row, *col + 3)),
                         "Глава" => match stroika_adr.0 + 2 == object_adr.0 {
                             true => Some((stroika_adr.0 + 1, stroika_adr.1)),
                             false => None,
@@ -131,8 +131,8 @@ impl Act {
                             false => None,
                         }
                         "Затраты труда, чел.-час" => {
-                            let ttl = search_points.get("итого по акту:");
-                            let ztr = search_points.get("зтр всего чел.-час");
+                            let ttl = search_points.get(&TagID::ИтогоПоАкту);
+                            let ztr = search_points.get(&TagID::ЗтрВсего);
 
                             if ztr.is_some() & ttl.is_some() {
                                 Some((ttl.unwrap().0, ztr.unwrap().1))

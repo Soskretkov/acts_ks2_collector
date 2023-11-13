@@ -3,8 +3,9 @@ use std::env;
 use std::path;
 use std::thread; // для засыпания на секунду-две при печати сообщений
 use std::time::Duration; // для засыпания на секунду-две при печати сообщений // имя ".exe" будет присвоено файлу Excel
-mod constants;
 mod errors;
+mod constants;
+mod types;
 mod extract;
 mod load;
 mod transform;

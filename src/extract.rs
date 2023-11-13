@@ -1,5 +1,6 @@
 use crate::constants::XL_FILE_EXTENSION;
 use crate::errors::Error;
+use crate::types::TagID;
 use crate::ui;
 use calamine::{DataType, Range, Reader, Xlsx, XlsxError};
 use std::collections::HashMap;
@@ -17,7 +18,7 @@ enum Row {
 }
 
 struct SearchTag {
-    tag: &'static str,
+    tag: TagID,
     is_required: bool,
     group_by_row: Option<Row>,
     group_by_col: Option<Column>,
@@ -27,16 +28,16 @@ struct SearchTag {
 // группировка по строке и столбцу для валидации в будующих версиях программы (не реализовано)
 #[rustfmt::skip]
 const SEARCH_TAGS: [SearchTag; 10] = [
-    SearchTag { is_required: false, group_by_row: None, group_by_col: Some(Column::Initial),  tag: "исполнитель" },
-    SearchTag { is_required: true, group_by_row: None, group_by_col: Some(Column::Initial),  tag: "стройка" },
-    SearchTag { is_required: true, group_by_row: None, group_by_col: Some(Column::Initial),  tag: "объект" },
-    SearchTag { is_required: true, group_by_row: None, group_by_col:Some(Column::Contract),  tag: "договор подряда" },
-    SearchTag { is_required: true, group_by_row:  None, group_by_col:Some(Column::Contract), tag: "доп. соглашение" },
-    SearchTag { is_required: true, group_by_row:  None, group_by_col: None, tag: "номер документа" },
-    SearchTag { is_required: true, group_by_row:  Some(Row::TableHeader), group_by_col: None, tag: "наименование работ и затрат" },
-    SearchTag { is_required: false, group_by_row:  Some(Row::TableHeader), group_by_col: None, tag: "зтр всего чел.-час" },
-    SearchTag { is_required: false, group_by_row:  None, group_by_col: Some(Column::Initial), tag: "итого по акту:" },
-    SearchTag { is_required: true, group_by_row:  None, group_by_col: None, tag: "стоимость материальных ресурсов (всего)" },
+    SearchTag { is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  tag: TagID::Исполнитель },
+    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  tag: TagID::Стройка },
+    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  tag: TagID::Объект },
+    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), tag: TagID::ДоговорПодряда },
+    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), tag: TagID::ДопСоглашение },
+    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: None,                   tag: TagID::НомерДокумента },
+    SearchTag { is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   tag: TagID::НаименованиеРаботИЗатрат },
+    SearchTag { is_required: false, group_by_row: Some(Row::TableHeader), group_by_col: None,                   tag: TagID::ЗтрВсего },
+    SearchTag { is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  tag: TagID::ИтогоПоАкту },
+    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: None,                   tag: TagID::СтоимостьМатериальныхРесурсовВсего },
 ];
 
 pub struct ExtractedXlBooks {
@@ -123,7 +124,7 @@ pub struct Sheet {
     pub path: PathBuf,
     pub sheet_name: String,
     pub data: Range<DataType>,
-    pub search_points: HashMap<&'static str, (usize, usize)>,
+    pub search_points: HashMap<TagID, (usize, usize)>,
     pub range_start: (usize, usize),
 }
 
@@ -192,7 +193,7 @@ impl<'a> Sheet {
                 Some(str) => {
                     //  println!("{}   {}    {}", str.eq_ignore_ascii_case(item.tag), str, item.tag);
 
-                    str.to_lowercase() == item.tag
+                    str.to_lowercase() == item.tag.as_str()
                 }
                 None => false,
             });
@@ -215,7 +216,7 @@ impl<'a> Sheet {
             .tag;
 
         search_points
-            .get(validation_tag)
+            .get(&validation_tag)
             .ok_or(Error::SheetNotContainAllNecessaryData {
                 file_path: &workbook.path,
                 search_points: search_points.clone(),
@@ -223,7 +224,7 @@ impl<'a> Sheet {
 
         // Проверка значений на удаленность столбцов, чтобы гарантировать что найден нужный лист.
         let initial_column_coords = search_points
-            .get("стройка")
+            .get(&TagID::Стройка)
             .unwrap_or_else(|| panic!("ложь: \"Необеспечены действительные имена HashMap\""));
 
         let (just_a_amount_requir_col, just_a_sum_requir_col) =
@@ -234,7 +235,7 @@ impl<'a> Sheet {
                         acc.0 + 1,
                         acc.1
                             + search_points
-                                .get(item.tag)
+                                .get(&item.tag)
                                 .unwrap_or_else(|| {
                                     panic!("ложь: \"Необеспечены действительные имена HashMap\"")
                                 })
