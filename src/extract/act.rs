@@ -1,10 +1,9 @@
+use super::sheet::Sheet;
+use crate::constants::{BASE_PRICE_COLUMN_OFFSET, CURRENT_PRICE_COLUMN_OFFSET};
+use crate::errors::Error;
+use crate::types::{XlDataType, TagID};
 use calamine::DataType;
 use std::collections::HashMap;
-use crate::types::TagID;
-use crate::errors::Error;
-use crate::extract::Sheet;
-use crate::constants::{BASE_PRICE_COLUMN_OFFSET, CURRENT_PRICE_COLUMN_OFFSET};
-
 
 #[derive(Debug, Clone)]
 pub struct DesiredData {
@@ -32,11 +31,6 @@ const DESIRED_DATA_ARRAY: [DesiredData; 16] = [
     DesiredData{name:"Затраты труда, чел.-час",      offset: None},
 ];
 
-#[derive(Debug, Clone)]
-pub enum DataVariant {
-    String(String),
-    Float(f64),
-}
 
 #[derive(Debug, Clone)]
 pub struct TotalsRow {
@@ -51,7 +45,7 @@ pub struct Act {
     pub path: String,
     pub sheetname: String,
     pub names_of_header: &'static [DesiredData; 16],
-    pub data_of_header: Vec<Option<DataVariant>>,
+    pub data_of_header: Vec<Option<XlDataType>>,
     pub data_of_totals: Vec<TotalsRow>,
     pub start_row_of_totals: usize,
 }
@@ -59,13 +53,13 @@ pub struct Act {
 impl Act {
     pub fn new(sheet: Sheet) -> Result<Act, Error<'static>> {
         let header_addresses = Self::cells_addreses_in_header(&sheet.search_points);
-        let data_of_header: Vec<Option<DataVariant>> = header_addresses
+        let data_of_header: Vec<Option<XlDataType>> = header_addresses
             .iter()
             .map(|address| match address {
                 Some(x) => match &sheet.data[*x] {
-                    DataType::DateTime(x) => Some(DataVariant::Float(*x)),
-                    DataType::Float(x) => Some(DataVariant::Float(*x)),
-                    DataType::String(x) => Some(DataVariant::String(x.trim().replace("\r\n", ""))),
+                    DataType::DateTime(x) => Some(XlDataType::Float(*x)),
+                    DataType::Float(x) => Some(XlDataType::Float(*x)),
+                    DataType::String(x) => Some(XlDataType::String(x.trim().replace("\r\n", ""))),
                     _ => None,
                 },
                 None => None,
@@ -76,7 +70,10 @@ impl Act {
             .search_points
             .get(&TagID::СтоимостьМатериальныхРесурсовВсего)
             .ok_or_else(|| Error::InternalLogic {
-                tech_descr: format!("HashMap не содержит ключ: {}", TagID::СтоимостьМатериальныхРесурсовВсего.as_str()),
+                tech_descr: format!(
+                    "HashMap не содержит ключ: {}",
+                    TagID::СтоимостьМатериальныхРесурсовВсего.as_str()
+                ),
                 err: None,
             })?;
 
@@ -99,7 +96,7 @@ impl Act {
         search_points: &HashMap<TagID, (usize, usize)>,
     ) -> Vec<Option<(usize, usize)>> {
         //unwrap не требует обработки (валидировано)
-        let stroika_adr = search_points.get(&TagID::Стройка).unwrap();  
+        let stroika_adr = search_points.get(&TagID::Стройка).unwrap();
         let object_adr = search_points.get(&TagID::Объект).unwrap();
         let contrac_adr = search_points.get(&TagID::ДоговорПодряда).unwrap();
         let dopsogl_adr = search_points.get(&TagID::ДопСоглашение).unwrap();

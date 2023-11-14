@@ -1,5 +1,6 @@
 use crate::errors::Error;
-use crate::transform::{Act, DataVariant, TotalsRow};
+use crate::extract::{Act, TotalsRow};
+use crate::types::XlDataType;
 use itertools::Itertools;
 use regex::Regex;
 use std::collections::HashMap;
@@ -585,7 +586,7 @@ impl<'a> Report {
                     .iter()
                     .position(|desired_data| desired_data.name == name)
                     .unwrap(); //.unwrap_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
-                let datavariant = &act.data_of_header[index];
+                let XlDataType = &act.data_of_header[index];
 
                 let date_list = [
                     "Договор дата",
@@ -600,8 +601,8 @@ impl<'a> Report {
                     Some(&fmt_num)
                 };
 
-                match datavariant {
-                    Some(DataVariant::String(text)) if name_is_date => {
+                match XlDataType {
+                    Some(XlDataType::String(text)) if name_is_date => {
                         let re = Regex::new(r"^\d{2}.\d{2}.\d{4}$").unwrap();
                         if re.is_match(text) {
                             let mut date_iterator =
@@ -614,10 +615,10 @@ impl<'a> Report {
                             sh.write_datetime(row, column, &datetime, format);
                         }
                     }
-                    Some(DataVariant::String(text)) => {
+                    Some(XlDataType::String(text)) => {
                         write_string(&mut sh, row, column, text, None)?
                     }
-                    Some(DataVariant::Float(number)) => {
+                    Some(XlDataType::Float(number)) => {
                         write_number(&mut sh, row, column, *number, format)?
                     }
                     None => (),
@@ -636,16 +637,16 @@ impl<'a> Report {
                             .iter()
                             .position(|desired_data| desired_data.name == "Глава наименование")
                             .unwrap(); //_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
-                        let datavariant_1 = &act.data_of_header[index_1];
-                        let datavariant_2 = &act.data_of_header[index_2];
+                        let XlDataType_1 = &act.data_of_header[index_1];
+                        let XlDataType_2 = &act.data_of_header[index_2];
 
-                        let temp_res_1 = match datavariant_1 {
-                            Some(DataVariant::String(word)) if !word.is_empty() => word,
+                        let temp_res_1 = match XlDataType_1 {
+                            Some(XlDataType::String(word)) if !word.is_empty() => word,
                             _ => break,
                         };
 
-                        let temp_res_2 = match datavariant_2 {
-                            Some(DataVariant::String(word)) if !word.is_empty() => word,
+                        let temp_res_2 = match XlDataType_2 {
+                            Some(XlDataType::String(word)) if !word.is_empty() => word,
                             _ => break,
                         };
 
@@ -659,9 +660,9 @@ impl<'a> Report {
                             .iter()
                             .position(|desired_data| desired_data.name == name)
                             .unwrap(); //_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
-                        let datavariant = &act.data_of_header[index];
+                        let XlDataType = &act.data_of_header[index];
 
-                        if let Some(DataVariant::String(txt)) = datavariant {
+                        if let Some(XlDataType::String(txt)) = XlDataType {
                             let text = txt.trim_start_matches("Смета № ");
                             write_string(&mut sh, row, column, text, None);
                         }
@@ -672,9 +673,9 @@ impl<'a> Report {
                             .iter()
                             .position(|desired_data| desired_data.name == name)
                             .unwrap(); //_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
-                        let datavariant = &act.data_of_header[index];
+                        let XlDataType = &act.data_of_header[index];
 
-                        if let Some(DataVariant::String(text)) = datavariant {
+                        if let Some(XlDataType::String(text)) = XlDataType {
                             // if text.matches(['/']).count() == 3 {
                             //    let text = &text.chars().take_while(|ch| *ch != '/').collect::<String>();
                             write_string(&mut sh, row, column, text, None)?;
@@ -688,9 +689,9 @@ impl<'a> Report {
                             .iter()
                             .position(|desired_data| desired_data.name == name)
                             .unwrap(); //_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
-                        let datavariant = &act.data_of_header[index];
+                        let XlDataType = &act.data_of_header[index];
 
-                        if let Some(DataVariant::String(text)) = datavariant {
+                        if let Some(XlDataType::String(text)) = XlDataType {
                             let _ = text
                                 .replace("тыс.", "")
                                 .replace("руб.", "")

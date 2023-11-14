@@ -1,3 +1,9 @@
+#[derive(Debug, Clone)]
+pub enum XlDataType {
+    String(String),
+    Float(f64),
+}
+
 #[derive(Debug, Clone, PartialEq, Hash, Eq, Copy)]
 pub enum TagID {
     Исполнитель,
