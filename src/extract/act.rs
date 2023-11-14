@@ -1,9 +1,10 @@
 use super::sheet::Sheet;
+use super::shared::types::SearchPoint;
 use crate::constants::{BASE_PRICE_COLUMN_OFFSET, CURRENT_PRICE_COLUMN_OFFSET};
 use crate::errors::Error;
-use crate::types::{XlDataType, TagID};
+use super::shared::types::TagID;
+use crate::types::XlDataType;
 use calamine::DataType;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct DesiredData {
@@ -52,7 +53,7 @@ pub struct Act {
 
 impl Act {
     pub fn new(sheet: Sheet) -> Result<Act, Error<'static>> {
-        let header_addresses = Self::cells_addreses_in_header(&sheet.search_points);
+        let header_addresses = Self::cells_addreses_in_header(&sheet.search_points)?;
         let data_of_header: Vec<Option<XlDataType>> = header_addresses
             .iter()
             .map(|address| match address {
@@ -68,14 +69,7 @@ impl Act {
 
         let (start_row_of_totals_in_range, start_col_of_totals_in_range) = *sheet
             .search_points
-            .get(&TagID::СтоимостьМатериальныхРесурсовВсего)
-            .ok_or_else(|| Error::InternalLogic {
-                tech_descr: format!(
-                    "HashMap не содержит ключ: {}",
-                    TagID::СтоимостьМатериальныхРесурсовВсего.as_str()
-                ),
-                err: None,
-            })?;
+            .get(&TagID::СтоимостьМатериальныхРесурсовВсего)?;
 
         let data_of_totals = Self::get_totals(
             &sheet,
@@ -93,8 +87,8 @@ impl Act {
         })
     }
     fn cells_addreses_in_header(
-        search_points: &HashMap<TagID, (usize, usize)>,
-    ) -> Vec<Option<(usize, usize)>> {
+        search_points: &SearchPoint,
+    ) -> Result<Vec<Option<(usize, usize)>>, Error<'static>> {
         //unwrap не требует обработки (валидировано)
         let stroika_adr = search_points.get(&TagID::Стройка).unwrap();
         let object_adr = search_points.get(&TagID::Объект).unwrap();
@@ -106,7 +100,7 @@ impl Act {
         let temp_vec: Vec<Option<(usize, usize)>> = DESIRED_DATA_ARRAY.iter().fold(Vec::new(), |mut vec, shift| {
 
                 let temp_cells_address: Option<(usize, usize)> = match shift {
-                    DesiredData{name: _, offset: Some((tag_id, (row, col)))} => {
+                    DesiredData{name: _, offset: Some((tag_id, (row, col)))} => {                      
                         let temp = match *tag_id {
                             TagID::Объект => ((object_adr.0 as isize + *row as isize) as usize, (object_adr.1 as isize + *col as isize) as usize),
                             TagID::ДоговорПодряда => ((contrac_adr.0 as isize + *row as isize) as usize, (contrac_adr.1 as isize + *col as isize) as usize),
@@ -118,7 +112,7 @@ impl Act {
                         Some(temp)
                     },
                     DesiredData{name: content, ..} => match *content {
-                        "Исполнитель" => search_points.get(&TagID::Исполнитель).map(|(row, col)| (*row, *col + 3)),
+                        "Исполнитель" => search_points.get(&TagID::Исполнитель).ok().map(|(row, col)| (*row, *col + 3)),
                         "Глава" => match stroika_adr.0 + 2 == object_adr.0 {
                             true => Some((stroika_adr.0 + 1, stroika_adr.1)),
                             false => None,
@@ -131,7 +125,7 @@ impl Act {
                             let ttl = search_points.get(&TagID::ИтогоПоАкту);
                             let ztr = search_points.get(&TagID::ЗтрВсего);
 
-                            if ztr.is_some() & ttl.is_some() {
+                            if ztr.is_ok() & ttl.is_ok() {
                                 Some((ttl.unwrap().0, ztr.unwrap().1))
                             } else {
                                 None
@@ -145,7 +139,7 @@ impl Act {
                 vec
 
             });
-        temp_vec
+        Ok(temp_vec)
     }
 
     fn get_totals(

@@ -1,8 +1,7 @@
 use super::books::Book;
+use super::shared::types::{SearchPoint, TagID};
 use crate::errors::Error;
-use crate::types::TagID;
 use calamine::{DataType, Range, Reader};
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 enum Column {
@@ -40,7 +39,7 @@ pub struct Sheet {
     pub path: PathBuf,
     pub sheet_name: String,
     pub data: Range<DataType>,
-    pub search_points: HashMap<TagID, (usize, usize)>,
+    pub search_points: SearchPoint,
     pub range_start: (usize, usize),
 }
 
@@ -51,7 +50,6 @@ impl<'a> Sheet {
         // (из-за мутабельности workbook проблема при попытке множественных ссылок: можно только клонировать)
         workbook: &'a mut Book,
         user_entered_sh_name: &'a str,
-        expected_columns_sum: usize,
     ) -> Result<Sheet, Error<'a>> {
         let entered_sh_name_lowercase = user_entered_sh_name.to_lowercase();
 
@@ -89,7 +87,7 @@ impl<'a> Sheet {
             sh_name: sheet_name.to_owned(),
         })?;
 
-        let mut search_points = HashMap::new();
+        let mut search_points = SearchPoint::new();
 
         let mut limited_cell_iterator = xl_sheet.used_cells();
         let mut found_cell;
@@ -133,38 +131,10 @@ impl<'a> Sheet {
 
         search_points
             .get(&validation_tag)
-            .ok_or(Error::SheetNotContainAllNecessaryData {
+            // нужно подменить штатную ошибку на ошибку валидации
+            .or_else(|_| Err(Error::SheetNotContainAllNecessaryData {
                 file_path: &workbook.path,
-                search_points: search_points.clone(),
-            })?;
-
-        // Проверка значений на удаленность столбцов, чтобы гарантировать что найден нужный лист.
-        let initial_column_coords = search_points
-            .get(&TagID::Стройка)
-            .unwrap_or_else(|| panic!("ложь: \"Необеспечены действительные имена HashMap\""));
-
-        let (just_a_amount_requir_col, just_a_sum_requir_col) =
-            SEARCH_TAGS
-                .iter()
-                .fold((0_usize, 0), |acc, item| match item.is_required {
-                    true => (
-                        acc.0 + 1,
-                        acc.1
-                            + search_points
-                                .get(&item.tag)
-                                .unwrap_or_else(|| {
-                                    panic!("ложь: \"Необеспечены действительные имена HashMap\"")
-                                })
-                                .1,
-                    ),
-                    false => acc,
-                });
-
-        if let false = just_a_sum_requir_col - initial_column_coords.1 * just_a_amount_requir_col
-            == expected_columns_sum
-        {
-            return Err(Error::ShiftedColumnsInHeader(&workbook.path));
-        }
+            }))?;
 
         let range_start = (sheet_start_coords.0 as usize, sheet_start_coords.1 as usize);
 

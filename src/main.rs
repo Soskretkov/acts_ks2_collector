@@ -92,8 +92,7 @@ fn main() {
                 let book = item.as_mut().unwrap();
                 let wrapped_sheet = Sheet::new(
                     book,
-                    &user_entered_sh_name,
-                    29, //передается для расчета смещения столбцов. Это сумма номеров столбцов Y-типа в DESIRED_DATA_ARRAY: 0 + 0 + 3 + 5 + 9 + 9 + 3.
+                    &user_entered_sh_name
                 );
 
                 let sheet = match wrapped_sheet {

@@ -1,7 +1,5 @@
-use crate::types::TagID;
 use std::fmt;
 use std::path::PathBuf;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum Error<'a> {
@@ -9,6 +7,7 @@ pub enum Error<'a> {
         tech_descr: String,
         err: Option<Box<dyn std::error::Error>>,
     },
+
     CalamineSheetOfTheBookIsUndetectable {
         file_path: &'a PathBuf,
         sh_name_for_search: &'a str,
@@ -26,7 +25,6 @@ pub enum Error<'a> {
     ShiftedColumnsInHeader(&'a PathBuf),
     SheetNotContainAllNecessaryData {
         file_path: &'a PathBuf,
-        search_points: HashMap<TagID, (usize, usize)>,
     },
     XlsxwriterWorkbookCreation {
         wb_name: &'a str,
@@ -130,7 +128,7 @@ impl fmt::Display for Error<'_> {
                 let full_msg = format!("{base_msg}\n\n{path_msg}");
                 write!(f, "{full_msg}")
             }
-            Self::SheetNotContainAllNecessaryData{file_path, search_points} => {
+            Self::SheetNotContainAllNecessaryData{file_path} => {
                 let base_msg = r#"В акте не полные данные.
 От собираемого файла требуется следующий набор ключевых слов:
     "Стройка",
@@ -147,11 +145,7 @@ impl fmt::Display for Error<'_> {
 перечисленом выше (т.е. в файле строка "Стройка" должна быть выше строки с "Объект", а "Объект",
 в свою очередь, расположен выше строки с текстом "Договор подряда" и так далее)."#;
                 let path_msg = format!("Файл, вызывающий ошибку:\n{}", file_path.display());
-                let full_msg = format!("{base_msg}\n\n{path_msg}");
-
-                // debug 
-                // write!(f, "{}\n\n{:#?}", full_msg, search_points)
-                
+                let full_msg = format!("{base_msg}\n\n{path_msg}");              
                 write!(f, "{full_msg}")
             }
             Self::XlsxwriterWorkbookCreation { wb_name, err } => {
