@@ -1,45 +1,13 @@
 use super::books::Book;
-use super::shared::types::{SearchPoint, TagID};
+use super::tags::{TagAddressMap, TAG_INFO_ARRAY};
 use crate::errors::Error;
 use calamine::{DataType, Range, Reader};
 use std::path::PathBuf;
-
-enum Column {
-    Initial,
-    Contract,
-}
-enum Row {
-    TableHeader,
-}
-
-struct SearchTag {
-    tag: TagID,
-    is_required: bool,
-    group_by_row: Option<Row>,
-    group_by_col: Option<Column>,
-}
-
-// перечислены в порядке вхождения слева на право и сверху вниз на листе Excel (вход по строкам важен для валидации)
-// группировка по строке и столбцу для валидации в будующих версиях программы (не реализовано)
-#[rustfmt::skip]
-const SEARCH_TAGS: [SearchTag; 10] = [
-    SearchTag { is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  tag: TagID::Исполнитель },
-    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  tag: TagID::Стройка },
-    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  tag: TagID::Объект },
-    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), tag: TagID::ДоговорПодряда },
-    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), tag: TagID::ДопСоглашение },
-    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: None,                   tag: TagID::НомерДокумента },
-    SearchTag { is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   tag: TagID::НаименованиеРаботИЗатрат },
-    SearchTag { is_required: false, group_by_row: Some(Row::TableHeader), group_by_col: None,                   tag: TagID::ЗтрВсего },
-    SearchTag { is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  tag: TagID::ИтогоПоАкту },
-    SearchTag { is_required: true,  group_by_row: None,                   group_by_col: None,                   tag: TagID::СтоимостьМатериальныхРесурсовВсего },
-];
-
 pub struct Sheet {
     pub path: PathBuf,
     pub sheet_name: String,
     pub data: Range<DataType>,
-    pub search_points: SearchPoint,
+    pub tag_address_map: TagAddressMap,
     pub range_start: (usize, usize),
 }
 
@@ -87,11 +55,12 @@ impl<'a> Sheet {
             sh_name: sheet_name.to_owned(),
         })?;
 
-        let mut search_points = SearchPoint::new();
+        let mut tag_address_map = TagAddressMap::new();
 
         let mut limited_cell_iterator = xl_sheet.used_cells();
         let mut found_cell;
-        for item in SEARCH_TAGS {
+
+        for item in TAG_INFO_ARRAY {
             let mut non_limited_cell_iterator = xl_sheet.used_cells();
 
             // Для обязательных тегов расходуемый итератор обеспечит валидацию очередности вохождения тегов
@@ -105,36 +74,38 @@ impl<'a> Sheet {
 
             found_cell = iterator.find(|cell| match cell.2.get_string() {
                 Some(str) => {
-                    //  println!("{}   {}    {}", str.eq_ignore_ascii_case(item.tag), str, item.tag);
+                    //  println!("{}   {}    {}", str.eq_ignore_ascii_case(item.id.), str, item.id.);
 
-                    str.to_lowercase() == item.tag.as_str()
+                    str.to_lowercase() == item.id.as_str()
                 }
                 None => false,
             });
 
             if let Some((row, col, _)) = found_cell {
-                search_points.insert(item.tag, (row, col));
+                tag_address_map.insert(item.id, (row, col));
             }
         }
 
         // Валидация на полноту данных: выше итератор расходующий ячейки и если хоть один поиск провалился, то это преждевременно
         // потребит все ячейки и извлечение по тегу последней строки в SEARCH_TAGS гарантированно провалится
-        let validation_tag = SEARCH_TAGS
+        let validation_tag = TAG_INFO_ARRAY
             .iter()
             .filter(|search_tag| search_tag.is_required)
             .last()
             .ok_or_else(|| Error::InternalLogic {
-                tech_descr: "SEARCH_TAGS пуст".to_string(),
+                tech_descr: "Массив с тегами для поиска пуст".to_string(),
                 err: None,
             })?
-            .tag;
+            .id;
 
-        search_points
+        tag_address_map
             .get(&validation_tag)
             // нужно подменить штатную ошибку на ошибку валидации
-            .or_else(|_| Err(Error::SheetNotContainAllNecessaryData {
-                file_path: &workbook.path,
-            }))?;
+            .or_else(|_| {
+                Err(Error::SheetNotContainAllNecessaryData {
+                    file_path: &workbook.path,
+                })
+            })?;
 
         let range_start = (sheet_start_coords.0 as usize, sheet_start_coords.1 as usize);
 
@@ -142,7 +113,7 @@ impl<'a> Sheet {
             path: workbook.path.clone(),
             sheet_name,
             data: xl_sheet,
-            search_points,
+            tag_address_map,
             range_start,
         })
     }
