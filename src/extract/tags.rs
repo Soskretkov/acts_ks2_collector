@@ -1,22 +1,6 @@
 use crate::errors::Error;
 use std::collections::HashMap;
 
-// перечислены в порядке вхождения слева на право и сверху вниз на листе Excel (вход по строкам важен для валидации)
-// группировка по строке и столбцу для валидации в будующих версиях программы (не реализовано)
-#[rustfmt::skip]
-pub const TAG_INFO_ARRAY: [TagInfo; 10] = [
-    TagInfo { is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  id: TagID::Исполнитель },
-    TagInfo { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  id: TagID::Стройка },
-    TagInfo { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  id: TagID::Объект },
-    TagInfo { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), id: TagID::ДоговорПодряда },
-    TagInfo { is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), id: TagID::ДопСоглашение },
-    TagInfo { is_required: true,  group_by_row: None,                   group_by_col: None,                   id: TagID::НомерДокумента },
-    TagInfo { is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   id: TagID::НаименованиеРаботИЗатрат },
-    TagInfo { is_required: false, group_by_row: Some(Row::TableHeader), group_by_col: None,                   id: TagID::ЗтрВсего },
-    TagInfo { is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  id: TagID::ИтогоПоАкту },
-    TagInfo { is_required: true,  group_by_row: None,                   group_by_col: None,                   id: TagID::СтоимостьМатериальныхРесурсовВсего },
-];
-
 #[derive(Clone, Copy)]
 pub enum Column {
     Initial,
@@ -46,18 +30,25 @@ pub enum TagID {
 impl TagID {
     pub fn as_str(&self) -> &'static str {
         match self {
-            TagID::Исполнитель => "исполнитель",
-            TagID::Стройка => "стройка",
-            TagID::Объект => "объект",
-            TagID::ДоговорПодряда => "договор подряда",
-            TagID::ДопСоглашение => "доп. соглашение",
-            TagID::НомерДокумента => "номер документа",
-            TagID::НаименованиеРаботИЗатрат => "наименование работ и затрат",
-            TagID::ЗтрВсего => "зтр всего чел.-час",
-            TagID::ИтогоПоАкту => "итого по акту:",
-            TagID::СтоимостьМатериальныхРесурсовВсего => "стоимость материальных ресурсов (всего)",
+            TagID::Исполнитель => "Исполнитель",
+            TagID::Стройка => "Стройка",
+            TagID::Объект => "Объект",
+            TagID::ДоговорПодряда => "Договор подряда",
+            TagID::ДопСоглашение => "Доп. соглашение",
+            TagID::НомерДокумента => "Номер документа",
+            TagID::НаименованиеРаботИЗатрат => "Наименование работ и затрат",
+            TagID::ЗтрВсего => "ЗТР всего чел",
+            TagID::ИтогоПоАкту => "Итого по акту:",
+            TagID::СтоимостьМатериальныхРесурсовВсего => "Стоимость материальных ресурсов (всего)",
         }
     }
+}
+
+// режим сравнения двух текстов: частичное или полное совпадение
+#[derive(Clone, Copy)]
+pub enum TextCmp {
+    Part,
+    Whole,
 }
 
 #[derive(Clone, Copy)]
@@ -66,7 +57,25 @@ pub struct TagInfo {
     pub is_required: bool,
     pub group_by_row: Option<Row>,
     pub group_by_col: Option<Column>,
+    pub look_at: TextCmp,
+    pub match_case: bool,
 }
+
+// перечислены в порядке вхождения слева на право и сверху вниз на листе Excel (вход по строкам важен для валидации)
+// группировка по строке и столбцу потребуется для валидации в будующих версиях программы (не реализовано)
+#[rustfmt::skip]
+pub const TAG_INFO_ARRAY: [TagInfo; 10] = [
+    TagInfo { id: TagID::Исполнитель,                        is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: false },
+    TagInfo { id: TagID::Стройка,                            is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: false },
+    TagInfo { id: TagID::Объект,                             is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: false },
+    TagInfo { id: TagID::ДоговорПодряда,                     is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), look_at: TextCmp::Whole, match_case: false },
+    TagInfo { id: TagID::ДопСоглашение,                      is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), look_at: TextCmp::Whole, match_case: false },
+    TagInfo { id: TagID::НомерДокумента,                     is_required: true,  group_by_row: None,                   group_by_col: None,                   look_at: TextCmp::Whole, match_case: false },
+    TagInfo { id: TagID::НаименованиеРаботИЗатрат,           is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Whole, match_case: false },
+    TagInfo { id: TagID::ЗтрВсего,                           is_required: false, group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Part,  match_case: true },
+    TagInfo { id: TagID::ИтогоПоАкту,                        is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: false },
+    TagInfo { id: TagID::СтоимостьМатериальныхРесурсовВсего, is_required: true,  group_by_row: None,                   group_by_col: None,                   look_at: TextCmp::Whole, match_case: false },
+];
 
 pub struct TagArrayTools;
 
@@ -85,8 +94,8 @@ impl TagArrayTools {
     }
 }
 
-// это обертка над хешкартой нужна чтобы централизовать обработку ошибок
-// в противном случае каждая попытка прочитать данные требует свой unwrap с ловлей ошибки
+// Это обертка над хешкартой, нужна чтобы централизовать обработку ошибок.
+// В противном случае каждая попытка прочитать данные из Hmap потребует индивидуальный unwrap с конвертацией в ошибку
 pub struct TagAddressMap {
     data: HashMap<TagID, (usize, usize)>,
 }

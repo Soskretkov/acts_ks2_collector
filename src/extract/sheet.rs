@@ -1,5 +1,5 @@
 use super::books::Book;
-use super::tags::{TagAddressMap, TAG_INFO_ARRAY};
+use super::tags::{TagAddressMap, TAG_INFO_ARRAY, TextCmp};
 use crate::errors::Error;
 use calamine::{DataType, Range, Reader};
 use std::path::PathBuf;
@@ -60,29 +60,41 @@ impl<'a> Sheet {
         let mut limited_cell_iterator = xl_sheet.used_cells();
         let mut found_cell;
 
-        for item in TAG_INFO_ARRAY {
+        for tag_info in TAG_INFO_ARRAY {
             let mut non_limited_cell_iterator = xl_sheet.used_cells();
 
             // Для обязательных тегов расходуемый итератор обеспечит валидацию очередности вохождения тегов
             // (например, "Стройку" мы ожидаем выше "Объекта, не наоборот).
             // Необязательным тегам расходуемый итератор не подходит, т.к. необязательный тег при отсутсвии израсходует итератор
-            let iterator = if item.is_required {
+            let iterator = if tag_info.is_required {
                 &mut limited_cell_iterator
             } else {
                 &mut non_limited_cell_iterator
             };
 
             found_cell = iterator.find(|cell| match cell.2.get_string() {
-                Some(str) => {
-                    //  println!("{}   {}    {}", str.eq_ignore_ascii_case(item.id.), str, item.id.);
-
-                    str.to_lowercase() == item.id.as_str()
+                Some(cell_content) => {
+                    let cell_content = if tag_info.match_case {
+                        cell_content.to_owned()
+                    } else {
+                        cell_content.to_lowercase()
+                    };
+                    let search_content = if tag_info.match_case {
+                        tag_info.id.as_str().to_owned()
+                    } else {
+                        tag_info.id.as_str().to_lowercase()
+                    };
+        
+                    match tag_info.look_at {
+                        TextCmp::Whole => cell_content == search_content,
+                        TextCmp::Part => cell_content.contains(&search_content),
+                    }
                 }
                 None => false,
             });
 
             if let Some((row, col, _)) = found_cell {
-                tag_address_map.insert(item.id, (row, col));
+                tag_address_map.insert(tag_info.id, (row, col));
             }
         }
 
