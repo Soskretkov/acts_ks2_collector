@@ -1,34 +1,40 @@
 use super::sheet::Sheet;
 use super::tags::{TagAddressMap, TagArrayTools, TagID};
-use crate::constants::{BASE_PRICE_COLUMN_OFFSET, CURRENT_PRICE_COLUMN_OFFSET};
 use crate::errors::Error;
 use crate::types::XlDataType;
 use calamine::DataType;
 
 #[derive(Debug, Clone)]
-pub struct DesiredCell {
-    pub name: &'static str,
-    pub offset: Option<(TagID, (i8, i8))>,
+pub struct CellCoords {
+    pub row: (TagID, i8),
+    pub col: (TagID, i8),
 }
 
+#[derive(Debug, Clone)]
+pub struct DesiredCell {
+    pub name: &'static str,
+    pub cell_coords: Option<CellCoords>,
+}
+
+// Some смещение безопасно задавать только обязательным тегом
 #[rustfmt::skip]
 const DESIRED_CELLS_ARRAY: [DesiredCell; 16] = [
-    DesiredCell{name:"Исполнитель",                  offset: Some((TagID::Исполнитель,              (0, 3)))},
-    DesiredCell{name:"Глава",                        offset: None},
-    DesiredCell{name:"Глава наименование",           offset: None},
-    DesiredCell{name:"Объект",                       offset: Some((TagID::Объект,                   (0, 3)))},
-    DesiredCell{name:"Договор №",                    offset: Some((TagID::ДоговорПодряда,           (0, 2)))},
-    DesiredCell{name:"Договор дата",                 offset: Some((TagID::ДоговорПодряда,           (1, 2)))},
-    DesiredCell{name:"Смета №",                      offset: Some((TagID::ДоговорПодряда,           (0, -9)))},
-    DesiredCell{name:"Смета наименование",           offset: Some((TagID::ДоговорПодряда,           (1, -9)))},
-    DesiredCell{name:"По смете в ц.2000г.",          offset: Some((TagID::ДопСоглашение,            (0, -4)))},
-    DesiredCell{name:"Выполнение работ в ц.2000г.",  offset: Some((TagID::ДопСоглашение,            (1, -4)))},
-    DesiredCell{name:"Акт №",                        offset: Some((TagID::НомерДокумента,           (2, 0)))},
-    DesiredCell{name:"Акт дата",                     offset: Some((TagID::НомерДокумента,           (2, 4)))},
-    DesiredCell{name:"Отчетный период начало",       offset: Some((TagID::НомерДокумента,           (2, 5)))},
-    DesiredCell{name:"Отчетный период окончание",    offset: Some((TagID::НомерДокумента,           (2, 6)))},
-    DesiredCell{name:"Метод расчета",                offset: Some((TagID::НаименованиеРаботИЗатрат, (-1, -3)))},
-    DesiredCell{name:"Затраты труда, чел.-час",      offset: None},
+    DesiredCell{name:"Исполнитель",                  cell_coords: None},
+    DesiredCell{name:"Глава",                        cell_coords: None},
+    DesiredCell{name:"Глава наименование",           cell_coords: None},
+    DesiredCell{name:"Объект",                       cell_coords: Some(CellCoords{row: (TagID::Объект, 0), col: (TagID::НаименованиеРаботИЗатрат, 0)})},
+    DesiredCell{name:"Договор №",                    cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 0), col: (TagID::ДоговорПодряда, 2)})},
+    DesiredCell{name:"Договор дата",                 cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 1), col: (TagID::ДоговорПодряда, 2)})},
+    DesiredCell{name:"Смета №",                      cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 0), col: (TagID::Стройка, 0)})},
+    DesiredCell{name:"Смета наименование",           cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 1), col: (TagID::Стройка, 0)})},
+    DesiredCell{name:"По смете в ц.2000г.",          cell_coords: Some(CellCoords{row: (TagID::ДопСоглашение, 0), col: (TagID::НомерДокумента, 0)})},
+    DesiredCell{name:"Выполнение работ в ц.2000г.",  cell_coords: Some(CellCoords{row: (TagID::ДопСоглашение, 1), col: (TagID::НомерДокумента, 0)})},
+    DesiredCell{name:"Акт №",                        cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2), col: (TagID::НомерДокумента, 0)})},
+    DesiredCell{name:"Акт дата",                     cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2), col: (TagID::НомерДокумента, 4)})},
+    DesiredCell{name:"Отчетный период начало",       cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2), col: (TagID::НомерДокумента, 5)})},
+    DesiredCell{name:"Отчетный период окончание",    cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2), col: (TagID::НомерДокумента, 6)})},
+    DesiredCell{name:"Метод расчета",                cell_coords: Some(CellCoords{row: (TagID::НаименованиеРаботИЗатрат, -1), col: (TagID::Стройка, 0)})},
+    DesiredCell{name:"Затраты труда, чел.-час",      cell_coords: None}, // небезопасно задать как Some, необязательные теги требуют особого подхода
 ];
 
 #[derive(Debug, Clone)]
@@ -43,7 +49,7 @@ pub struct TotalsRow {
 pub struct Act {
     pub path: String,
     pub sheetname: String,
-    pub names_of_header: &'static [DesiredCell; 16],
+    pub names_of_header: &'static [DesiredCell],
     pub data_of_header: Vec<Option<XlDataType>>,
     pub data_of_totals: Vec<TotalsRow>,
     pub start_row_of_totals: usize,
@@ -52,16 +58,23 @@ pub struct Act {
 impl Act {
     pub fn new(sheet: Sheet) -> Result<Act, Error<'static>> {
         let header_addresses = Self::calculate_header_cell_addresses(&sheet.tag_address_map)?;
+        // println!("{:#?}", header_addresses);
         let data_of_header: Vec<Option<XlDataType>> = header_addresses
             .iter()
-            .map(|address| match address {
-                Some(x) => match &sheet.data[*x] {
-                    DataType::DateTime(x) => Some(XlDataType::Float(*x)),
-                    DataType::Float(x) => Some(XlDataType::Float(*x)),
-                    DataType::String(x) => Some(XlDataType::String(x.trim().replace("\r\n", ""))),
-                    _ => None,
-                },
-                None => None,
+            .map(|address| {
+                // println!("Обрабатывается адрес: {:?}", address);
+
+                match address {
+                    Some(adr) => match &sheet.data[*adr] {
+                        DataType::DateTime(x) => Some(XlDataType::Float(*x)),
+                        DataType::Float(x) => Some(XlDataType::Float(*x)),
+                        DataType::String(x) => {
+                            Some(XlDataType::String(x.trim().replace("\r\n", "")))
+                        }
+                        _ => None,
+                    },
+                    None => None,
+                }
             })
             .collect();
 
@@ -90,6 +103,8 @@ impl Act {
     ) -> Result<Vec<Option<(usize, usize)>>, Error<'static>> {
         let stroika_adr = tag_address_map.get(&TagID::Стройка)?;
         let object_adr = tag_address_map.get(&TagID::Объект)?;
+        let naimenov_rabot_i_zatr_adr = tag_address_map.get(&TagID::НаименованиеРаботИЗатрат)?;
+        // Предполагается что строка с Главой должна четко находиться между "Стройкой" и "Объектом"
         let is_valid_glava = stroika_adr.0 + 2 == object_adr.0;
         let mut vec: Vec<Option<(usize, usize)>> = Vec::new();
 
@@ -97,30 +112,14 @@ impl Act {
             let temp_cells_address: Option<(usize, usize)> = match item {
                 DesiredCell {
                     name: _,
-                    offset: Some((tag_id, (row, col))),
-                } => {
-                    let tag_info = TagArrayTools::get_tag_info_by_id(tag_id)?;
-                    let wrapped_adr = tag_address_map.get(&tag_id);
-
-                    // Возвращаем ошибку, если тег обязателен, но адрес не найден
-                    if wrapped_adr.is_err() && tag_info.is_required {
-                        return Err(Error::InternalLogic {
-                            tech_descr: format!(
-                                r#"Хешкарта не содержит ключ "{}""#,
-                                tag_id.as_str()
-                            ),
-                            err: None,
-                        });
-                    }
-
-                    wrapped_adr.ok().map(|adr| {
-                        (
-                            (adr.0 as isize + row as isize) as usize,
-                            (adr.1 as isize + col as isize) as usize,
-                        )
-                    })
-                }
+                    cell_coords: Some(cell_coords_struct),
+                } => Some(calculate_cell_adr_by_coords(tag_address_map, cell_coords_struct)?),
+                // рукав обработывает ячейки, поиск которых основан на необязательных тегах (индивидуальная логика)
                 DesiredCell { name, .. } => match name {
+                    "Исполнитель" => tag_address_map
+                        .get(&TagID::Исполнитель)
+                        .ok()
+                        .map(|(row_adr, _)| (*row_adr, naimenov_rabot_i_zatr_adr.1)),
                     "Глава" => {
                         if is_valid_glava {
                             Some((stroika_adr.0 + 1, stroika_adr.1))
@@ -130,7 +129,7 @@ impl Act {
                     }
                     "Глава наименование" => {
                         if is_valid_glava {
-                            Some((stroika_adr.0 + 1, stroika_adr.1 + 3))
+                            Some((stroika_adr.0 + 1, naimenov_rabot_i_zatr_adr.1))
                         } else {
                             None
                         }
@@ -163,18 +162,18 @@ impl Act {
 
     fn get_totals(
         sheet: &Sheet,
-        first_row_address: (usize, usize),
+        totals_start_adr: (usize, usize),
     ) -> Result<Vec<TotalsRow>, Error<'static>> {
-        let (starting_row, starting_col) = first_row_address;
+        let (totals_start_row, totals_start_col) = totals_start_adr;
         let total_row = sheet.data.get_size().0;
-        let base_col = starting_col + BASE_PRICE_COLUMN_OFFSET;
-        let current_col = starting_col + CURRENT_PRICE_COLUMN_OFFSET;
+        let base_col = sheet.tag_address_map.get(&TagID::СтоимостьВЦенах2001)?.1;
+        let current_col = sheet.tag_address_map.get(&TagID::СтоимостьВТекущихЦенах)?.1;
 
         let mut blank_row_flag = false;
         let mut totals_row_vec = Vec::<TotalsRow>::new();
 
-        for row in starting_row..total_row {
-            let row_data_type = &sheet.data[(row, starting_col)];
+        for row in totals_start_row..total_row {
+            let row_data_type = &sheet.data[(row, totals_start_col)];
             if row_data_type.is_string() {
                 let base_price = &sheet.data[(row, base_col)];
                 let current_price = &sheet.data[(row, current_col)];
@@ -217,5 +216,62 @@ impl Act {
         }
 
         Ok(totals_row_vec)
+    }
+}
+
+fn calculate_cell_adr_by_coords(
+    tag_address_map: &TagAddressMap,
+    cell_coords: CellCoords,
+) -> Result<(usize, usize), Error<'static>> {
+    let row_tag_adr = tag_address_map.get(&cell_coords.row.0)?;
+    let col_tag_adr = tag_address_map.get(&cell_coords.col.0)?;
+    let row_ofst = cell_coords.row.1;
+    let col_ofst = cell_coords.col.1;
+
+    let row_result = row_tag_adr
+        .0
+        .try_into()
+        .map_err(|err| Error::NumericConversion {
+            tech_descr: format!(
+                r#"Не удалась конвертация типа usize с значением "{}" в тип isize."#,
+                row_tag_adr.0
+            ),
+            err: Box::new(err),
+        })
+        .and_then(|row: isize| {
+            row.checked_add(row_ofst as isize)
+                .ok_or_else(|| Error::NumericOverflowError {
+                    tech_descr: format!(
+                        "Переполнение при сложении типа isize ({}) с типом isize ({}).",
+                        row, row_ofst
+                    ),
+                })
+        })
+        .map(|row| row as usize);
+
+    let col_result = col_tag_adr
+        .1
+        .try_into()
+        .map_err(|err| Error::NumericConversion {
+            tech_descr: format!(
+                r#"Не удалась конвертация типа usize с значением "{}" в тип isize."#,
+                col_tag_adr.1
+            ),
+            err: Box::new(err),
+        })
+        .and_then(|col: isize| {
+            col.checked_add(col_ofst as isize)
+                .ok_or_else(|| Error::NumericOverflowError {
+                    tech_descr: format!(
+                        "Переполнение при сложении типа isize ({}) с типом isize ({}).",
+                        col, col_ofst
+                    ),
+                })
+        })
+        .map(|c| c as usize);
+
+    match (row_result, col_result) {
+        (Ok(row), Ok(col)) => Ok((row, col)),
+        (Err(e), _) | (_, Err(e)) => return Err(e),
     }
 }

@@ -1,4 +1,5 @@
 use crate::constants::CONSOLE_LEFT_MARGIN_IN_SPACES;
+use crate::errors::Error;
 use console::{Style, Term};
 use dialoguer::Input;
 use std::io;
@@ -6,13 +7,20 @@ use std::path::PathBuf;
 use std::thread; // для засыпания на секунду-две
 use std::time::Duration; // для засыпания на секунду-две // для очистки консоли перед выводом полезных сообщений
 
-pub fn user_input() -> (PathBuf, String) {
+pub fn user_input() -> Result<(PathBuf, String), Error<'static>> {
     loop {
         let entered_text = inputting_path();
         let path = PathBuf::from(&entered_text);
 
+        // приходится обрабатывать любые пути с тире так как консоль автматически переводит длинное тире `—`к короткому `-`
+        // при том что .exists() чувствителен к этой разнице. Длинное тире очень часто встречается так как windows генерирует его
+        // автоматически к любому дубликату в файловой системы (в виде постфикса "— копия" перед расширением файла)
         if path.exists() {
-            break (path, entered_sheet_name());
+            break Ok((path, entered_sheet_name()));
+        } else if path.to_string_lossy().contains("- копия") {
+            break Err(Error::InvalidDashInUserPath {
+                entered_path: path.clone(),
+            });
         }
 
         //filter нужен на случай ввода "details"  в кавычках (@ - на случай русской раскладки)
@@ -115,8 +123,9 @@ fn entered_sheet_name() -> String {
     let _ = Term::stdout().clear_screen();
     let msg = prepend_spaces_to_non_empty_lines(
         "Подтвердите лист или укажите другой.
-    Не имеет значения, используете ли вы прописные или строчные буквы при указании листа.
-    Имя листа",
+Не имеет значения, используете ли вы прописные или строчные буквы при указании листа.
+
+Имя листа",
     );
     let entered_sh_name: String = Input::new()
         .with_prompt(msg)

@@ -8,6 +8,17 @@ pub enum Error<'a> {
         err: Option<Box<dyn std::error::Error>>,
     },
 
+    InvalidDashInUserPath {
+        entered_path: PathBuf,
+    },
+    NumericConversion {
+        tech_descr: String,
+        err: Box<dyn std::error::Error>,
+    },
+    NumericOverflowError {
+        tech_descr: String,
+    },
+
     CalamineSheetOfTheBookIsUndetectable {
         file_path: &'a PathBuf,
         sh_name_for_search: &'a str,
@@ -22,7 +33,7 @@ pub enum Error<'a> {
         file_path: &'a PathBuf,
         sh_name: String, // нельзя ссылкой - имя листа с учетом регистра определяется внутри функции, где возможна ошибка
     },
-    ShiftedColumnsInHeader(&'a PathBuf),
+    // ShiftedColumnsInHeader(&'a PathBuf),
     SheetNotContainAllNecessaryData {
         file_path: &'a PathBuf,
     },
@@ -46,18 +57,45 @@ impl fmt::Display for Error<'_> {
             Self::InternalLogic { tech_descr, err } => {
                 let base_msg = format!(
                     "Во внутренней логике программы произошла ошибка.
-                    {tech_descr}"
+{tech_descr}"
                 );
-
                 let footer_msg = match err {
-                    Some(err) => format!("\n\nПодробности об ошибке:\n{}", err),
+                    Some(err) => format!("Подробности об ошибке:\n{}", err),
                     None => "".to_string(),
                 };
-
-                let full_msg = format!("{base_msg}{footer_msg}");
-
+                let full_msg = format!("{base_msg}\n\n{footer_msg}");
                 write!(f, "{full_msg}")
             }
+
+            Self::InvalidDashInUserPath { entered_path } => {
+                let base_msg = format!("Обнаружена ошибка в пути:\n{}", entered_path.display());
+                let footer_msg ="Похоже, в пути присутствует длинное тире («— копия»).
+Терминал windows (окно которое вы наблюдаете) иногда заменяет его на короткое, что приводит к ошибке.
+Пожалуйста, переименуйте файл или папку, удалив или заменив длинное тире. После повторите попытку.
+
+P.s. Не беспокойтесь обо всех вложенных папках, в которых может встречаться длинное тире,
+программе их наличие не мешает, проблема возникает на этапе когда вы вставляете путь в окно,
+важно чтобы этот путь не исказился и длинное тире автоматически не подменилось на короткое.
+(попробуйте вставить в это окно любой текст с длинным тире, и вы увидите, что оно автоматически
+меняется, что создает проблему программе принять от вас неискаженный терминалом windows путь)";
+                let full_msg = format!("{base_msg}\n\n{footer_msg}");
+                write!(f, "{full_msg}")
+            }
+
+            Self::NumericConversion { tech_descr, err } => {
+                let base_msg = tech_descr;
+                let footer_msg = format!("Подробности об ошибке:\n{}", err);
+                let full_msg = format!("{base_msg}\n\n{footer_msg}");
+                write!(f, "{full_msg}")
+            }
+
+            Self::NumericOverflowError { tech_descr } => {
+                let base_msg = "Переполнение при операции с числами.";
+                let footer_msg = format!("Подробности об ошибке:\n{}", tech_descr);
+                let full_msg = format!("{base_msg}\n\n{footer_msg}");
+                write!(f, "{full_msg}")
+            }
+
             Self::CalamineSheetOfTheBookIsUndetectable {
                 file_path,
                 sh_name_for_search,
@@ -100,6 +138,7 @@ impl fmt::Display for Error<'_> {
                 let full_msg = format!("{base_msg}{optional_msg}\n\n{footer_msg}\n\n{path_msg}");
                 write!(f, "{full_msg}")
             }
+
             Self::CalamineSheetOfTheBookIsUnreadable {
                 file_path,
                 sh_name,
@@ -111,24 +150,26 @@ impl fmt::Display for Error<'_> {
                 let full_msg = format!("{base_msg}\n\n{footer_msg}\n\n{path_msg}");
                 write!(f, "{full_msg}")
             }
+
             Self::EmptySheetRange { file_path, sh_name } => {
                 let base_msg = format!(r#"Лист «{sh_name}» не содержит данных (пуст)"#);
                 let path_msg = format!("Файл, вызывающий ошибку:\n{}", file_path.display());
                 let full_msg = format!("{base_msg}\n\n{path_msg}");
                 write!(f, "{full_msg}")
             }
-            Self::ShiftedColumnsInHeader(file_path) => {
-                let base_msg = r#"Обнаружен нестандартный заголовок в Акте «КС-2».
-Ожидаемая диспозиция столбцов для успешного сбора такова:
-    "Стройка" и "Объект"                      - находятся в одном столбце,
-    "Наименование работ и затрат"             - смещение на 3 столбца  относительно "Стройки" и "Объекта",
-    "Номер документа"                         - смещение на 5 столбцов относительно "Стройки" и "Объекта",
-    "Договор подряда" и "Доп. соглашение"     - смещение на 9 столбцов относительно "Стройки" и "Объекта"."#;
-                let path_msg = format!("Файл, вызывающий ошибку:\n{}", file_path.display());
-                let full_msg = format!("{base_msg}\n\n{path_msg}");
-                write!(f, "{full_msg}")
-            }
-            Self::SheetNotContainAllNecessaryData{file_path} => {
+
+            //             Self::ShiftedColumnsInHeader(file_path) => {
+            //                 let base_msg = r#"Обнаружен нестандартный заголовок в Акте «КС-2».
+            // Ожидаемая диспозиция столбцов для успешного сбора такова:
+            //     "Стройка" и "Объект"                      - находятся в одном столбце,
+            //     "Наименование работ и затрат"             - смещение на 3 столбца  относительно "Стройки" и "Объекта",
+            //     "Номер документа"                         - смещение на 5 столбцов относительно "Стройки" и "Объекта",
+            //     "Договор подряда" и "Доп. соглашение"     - смещение на 9 столбцов относительно "Стройки" и "Объекта"."#;
+            //                 let path_msg = format!("Файл, вызывающий ошибку:\n{}", file_path.display());
+            //                 let full_msg = format!("{base_msg}\n\n{path_msg}");
+            //                 write!(f, "{full_msg}")
+            //             }
+            Self::SheetNotContainAllNecessaryData { file_path } => {
                 let base_msg = r#"В акте не полные данные.
 От собираемого файла требуется следующий набор ключевых слов:
     "Стройка",
@@ -145,9 +186,10 @@ impl fmt::Display for Error<'_> {
 перечисленом выше (т.е. в файле строка "Стройка" должна быть выше строки с "Объект", а "Объект",
 в свою очередь, расположен выше строки с текстом "Договор подряда" и так далее)."#;
                 let path_msg = format!("Файл, вызывающий ошибку:\n{}", file_path.display());
-                let full_msg = format!("{base_msg}\n\n{path_msg}");              
+                let full_msg = format!("{base_msg}\n\n{path_msg}");
                 write!(f, "{full_msg}")
             }
+
             Self::XlsxwriterWorkbookCreation { wb_name, err } => {
                 let base_msg = format!(
                     r#"Не удалась попытка создания файла Excel с именем "{wb_name}", речь о файле Excel,
@@ -158,11 +200,13 @@ impl fmt::Display for Error<'_> {
                 let full_msg = format!("{base_msg}\n\n{footer_msg}");
                 write!(f, "{full_msg}")
             }
+
             Self::XlsxwriterSheetCreationFailed => {
                 let msg = "Не удалась попытка создание листа результата внутри нового файла Excel, речь о листе Excel на котором
 должен был быть записан результат работы программы.";
                 write!(f, "{msg}")
             }
+
             Self::XlsxwriterCellWriteFailed(err) => {
                 let base_msg =
                     "Не удалась попытка записи данных в ячейку нового файла Excel, того самого,
@@ -172,6 +216,7 @@ impl fmt::Display for Error<'_> {
                 let full_msg = format!("{base_msg}\n\n{footer_msg}");
                 write!(f, "{full_msg}")
             }
+
             Self::XlsxwriterWorkbookClose { wb_name, .. } => {
                 let msg = format!(
                     r#"Не удалось сохранение на диск файла Excel с именем "{wb_name}", который содержит

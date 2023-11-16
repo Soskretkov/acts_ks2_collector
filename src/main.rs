@@ -3,17 +3,17 @@ use std::env;
 use std::path;
 use std::thread; // для засыпания на секунду-две при печати сообщений
 use std::time::Duration; // для засыпания на секунду-две при печати сообщений // имя ".exe" будет присвоено файлу Excel
-mod errors;
 mod constants;
-mod types;
+mod errors;
 mod extract;
 mod load;
+mod types;
 mod ui;
 use crate::constants::{SUCCESS_PAUSE_DURATION, XL_FILE_EXTENSION};
 use crate::errors::Error;
+use crate::extract::Act;
 use crate::extract::{ExtractedBooks, Sheet};
 use crate::load::Report;
-use crate::extract::Act;
 
 fn main() {
     Term::stdout().set_title("«Ks2 etl»,  v".to_string() + env!("CARGO_PKG_VERSION"));
@@ -24,10 +24,17 @@ fn main() {
     'main_loop: loop {
         println!("\n");
 
-        let (path, user_entered_sh_name) = ui::user_input();
+        let (path, user_entered_sh_name) = match ui::user_input() {
+            Ok(x) => x,
+            Err(err) => {
+                display_error_and_wait(err);
+                continue 'main_loop;
+            }
+        };
         // Debug
         // let user_entered_sh_name = "Лист1".to_owned();
-        // let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl".to_string());
+        // let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl\02-01.1-0239С-2С-И3-17-01-2023 - копия.xlsm".to_string());
+        // let path = std::path::PathBuf::from(r"C:\Users\User\rust\ks2_etl\02-01.1-0239С-2С-И3-17-01-2023 — копия.xlsm".to_string());
 
         let string_report_path = env::args()
             .next()
@@ -90,10 +97,7 @@ fn main() {
             let mut temp_acts_vec = Vec::new();
             for mut item in books_vec.into_iter() {
                 let book = item.as_mut().unwrap();
-                let wrapped_sheet = Sheet::new(
-                    book,
-                    &user_entered_sh_name
-                );
+                let wrapped_sheet = Sheet::new(book, &user_entered_sh_name);
 
                 let sheet = match wrapped_sheet {
                     Ok(x) => x,

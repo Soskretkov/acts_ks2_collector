@@ -21,6 +21,8 @@ pub enum TagID {
     ДопСоглашение,
     НомерДокумента,
     НаименованиеРаботИЗатрат,
+    СтоимостьВЦенах2001,
+    СтоимостьВТекущихЦенах,
     ЗтрВсего,
     ИтогоПоАкту,
     СтоимостьМатериальныхРесурсовВсего,
@@ -37,6 +39,8 @@ impl TagID {
             TagID::ДопСоглашение => "Доп. соглашение",
             TagID::НомерДокумента => "Номер документа",
             TagID::НаименованиеРаботИЗатрат => "Наименование работ и затрат",
+            TagID::СтоимостьВЦенах2001 => "Стоимость в ценах 2001",
+            TagID::СтоимостьВТекущихЦенах => "Стоимость в текущих ценах",
             TagID::ЗтрВсего => "ЗТР всего чел",
             TagID::ИтогоПоАкту => "Итого по акту:",
             TagID::СтоимостьМатериальныхРесурсовВсего => "Стоимость материальных ресурсов (всего)",
@@ -61,10 +65,10 @@ pub struct TagInfo {
     pub match_case: bool,
 }
 
-// перечислены в порядке вхождения слева на право и сверху вниз на листе Excel (вход по строкам важен для валидации)
-// группировка по строке и столбцу потребуется для валидации в будующих версиях программы (не реализовано)
+// Перечислены в порядке вхождения на листе Excel при чтении ячеек слева направо и сверху вниз  (вхождение по строкам важно для валидации)
+// Группировка по строке и столбцу потребуется для валидации в будующих версиях программы (не реализовано)
 #[rustfmt::skip]
-pub const TAG_INFO_ARRAY: [TagInfo; 10] = [
+pub const TAG_INFO_ARRAY: [TagInfo; 12] = [
     TagInfo { id: TagID::Исполнитель,                        is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: false },
     TagInfo { id: TagID::Стройка,                            is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: false },
     TagInfo { id: TagID::Объект,                             is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: false },
@@ -72,8 +76,10 @@ pub const TAG_INFO_ARRAY: [TagInfo; 10] = [
     TagInfo { id: TagID::ДопСоглашение,                      is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), look_at: TextCmp::Whole, match_case: false },
     TagInfo { id: TagID::НомерДокумента,                     is_required: true,  group_by_row: None,                   group_by_col: None,                   look_at: TextCmp::Whole, match_case: false },
     TagInfo { id: TagID::НаименованиеРаботИЗатрат,           is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Whole, match_case: false },
+    TagInfo { id: TagID::СтоимостьВЦенах2001,                is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Part,  match_case: true },
+    TagInfo { id: TagID::СтоимостьВТекущихЦенах,             is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Part,  match_case: true },
     TagInfo { id: TagID::ЗтрВсего,                           is_required: false, group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Part,  match_case: true },
-    TagInfo { id: TagID::ИтогоПоАкту,                        is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: false },
+    TagInfo { id: TagID::ИтогоПоАкту,                        is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: true },
     TagInfo { id: TagID::СтоимостьМатериальныхРесурсовВсего, is_required: true,  group_by_row: None,                   group_by_col: None,                   look_at: TextCmp::Whole, match_case: false },
 ];
 
@@ -96,6 +102,7 @@ impl TagArrayTools {
 
 // Это обертка над хешкартой, нужна чтобы централизовать обработку ошибок.
 // В противном случае каждая попытка прочитать данные из Hmap потребует индивидуальный unwrap с конвертацией в ошибку
+#[derive(Debug)]
 pub struct TagAddressMap {
     data: HashMap<TagID, (usize, usize)>,
 }

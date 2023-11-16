@@ -65,10 +65,28 @@ impl ExtractedBooks {
                 ui::display_formatted_text("\nОтбранны файлы:", None);
             }
 
+            // .is_dir() нужен в виду того что путь к файлу вернет по .parent() весь путь включая ближайшую папку
+            // что .strip_prefix образует путь к файлу без единой папки, чего нам не надо
             let file_display_path = if path.is_dir() {
-                file_checked_path
+                match path.parent() {
+                    Some(parent_folder_path)=> entry
+                    .path()
+                    .strip_prefix(parent_folder_path)
+                    .map_err(|err| Error::InternalLogic {
+                        tech_descr: format!(
+                            r#"Не удалось создать для вывода в консоль относительный путь для файла:
+{}"#,
+                            entry.path().to_string_lossy()
+                        ),
+                        err: Some(Box::new(err)),
+                    })?
+                    .to_string_lossy()
+                    .to_string(),
+                    None => entry
+                    .path().to_string_lossy().to_string(),
+                }
             } else {
-                path.to_string_lossy()
+                path.to_string_lossy().to_string()
             };
 
             file_print_counter += 1;
