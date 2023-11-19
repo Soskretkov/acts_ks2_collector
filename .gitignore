@@ -3,3 +3,4 @@
 ~$*.xls*
 /*.lnk
 _*
+@example.xlsm

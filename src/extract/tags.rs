@@ -36,7 +36,7 @@ impl TagID {
             TagID::Стройка => "Стройка",
             TagID::Объект => "Объект",
             TagID::ДоговорПодряда => "Договор подряда",
-            TagID::ДопСоглашение => "Доп. соглашение",
+            TagID::ДопСоглашение => "Доп. соглашение", // треб. страховать случай "Доп. Соглашение" - Excel автоматически передводит символ после точки в верх. регистр
             TagID::НомерДокумента => "Номер документа",
             TagID::НаименованиеРаботИЗатрат => "Наименование работ и затрат",
             TagID::СтоимостьВЦенах2001 => "Стоимость в ценах 2001",
@@ -53,6 +53,8 @@ impl TagID {
 pub enum TextCmp {
     Part,
     Whole,
+    StartsWith,
+    EndsWith,
 }
 
 #[derive(Clone, Copy)]
@@ -69,18 +71,18 @@ pub struct TagInfo {
 // Группировка по строке и столбцу потребуется для валидации в будующих версиях программы (не реализовано)
 #[rustfmt::skip]
 pub const TAG_INFO_ARRAY: [TagInfo; 12] = [
-    TagInfo { id: TagID::Исполнитель,                        is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: false },
-    TagInfo { id: TagID::Стройка,                            is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: false },
-    TagInfo { id: TagID::Объект,                             is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: false },
-    TagInfo { id: TagID::ДоговорПодряда,                     is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), look_at: TextCmp::Whole, match_case: false },
-    TagInfo { id: TagID::ДопСоглашение,                      is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), look_at: TextCmp::Whole, match_case: false },
-    TagInfo { id: TagID::НомерДокумента,                     is_required: true,  group_by_row: None,                   group_by_col: None,                   look_at: TextCmp::Whole, match_case: false },
-    TagInfo { id: TagID::НаименованиеРаботИЗатрат,           is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Whole, match_case: false },
-    TagInfo { id: TagID::СтоимостьВЦенах2001,                is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Part,  match_case: true },
-    TagInfo { id: TagID::СтоимостьВТекущихЦенах,             is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Part,  match_case: true },
-    TagInfo { id: TagID::ЗтрВсего,                           is_required: false, group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Part,  match_case: true },
-    TagInfo { id: TagID::ИтогоПоАкту,                        is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole, match_case: true },
-    TagInfo { id: TagID::СтоимостьМатериальныхРесурсовВсего, is_required: true,  group_by_row: None,                   group_by_col: None,                   look_at: TextCmp::Whole, match_case: false },
+    TagInfo { id: TagID::Исполнитель,                        is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
+    TagInfo { id: TagID::Стройка,                            is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
+    TagInfo { id: TagID::Объект,                             is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
+    TagInfo { id: TagID::ДоговорПодряда,                     is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), look_at: TextCmp::Whole,      match_case: true },
+    TagInfo { id: TagID::ДопСоглашение,                      is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), look_at: TextCmp::Whole,      match_case: false },
+    TagInfo { id: TagID::НомерДокумента,                     is_required: true,  group_by_row: None,                   group_by_col: None,                   look_at: TextCmp::Whole,      match_case: true },
+    TagInfo { id: TagID::НаименованиеРаботИЗатрат,           is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Whole,      match_case: true },
+    TagInfo { id: TagID::СтоимостьВЦенах2001,                is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::StartsWith, match_case: true },
+    TagInfo { id: TagID::СтоимостьВТекущихЦенах,             is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Whole,      match_case: true },
+    TagInfo { id: TagID::ЗтрВсего,                           is_required: false, group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::StartsWith, match_case: true },
+    TagInfo { id: TagID::ИтогоПоАкту,                        is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
+    TagInfo { id: TagID::СтоимостьМатериальныхРесурсовВсего, is_required: true,  group_by_row: None,                   group_by_col: None,                   look_at: TextCmp::Whole,      match_case: true },
 ];
 
 pub struct TagArrayTools;

@@ -88,6 +88,8 @@ impl<'a> Sheet {
                     match tag_info.look_at {
                         TextCmp::Whole => cell_content == search_content,
                         TextCmp::Part => cell_content.contains(&search_content),
+                        TextCmp::StartsWith => cell_content.starts_with(&search_content),
+                        TextCmp::EndsWith => cell_content.ends_with(&search_content),
                     }
                 }
                 None => false,
