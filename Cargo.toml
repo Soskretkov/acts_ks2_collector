@@ -15,3 +15,8 @@ itertools = "*"
 regex = "*" #используется в load.rs
 walkdir = "*"
 dialoguer = "*"
+
+[profile.release]
+opt-level = 3
+lto = true
+debug = false

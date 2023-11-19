@@ -22,8 +22,6 @@ fn main() {
     let cyan = Style::new().cyan();
     let red = Style::new().red();
     'main_loop: loop {
-        println!("\n");
-
         let (path, user_entered_sh_name) = match ui::user_input() {
             Ok(x) => x,
             Err(err) => {
@@ -95,11 +93,16 @@ fn main() {
 
         let acts_vec = {
             let mut temp_acts_vec = Vec::new();
-            for mut item in books_vec.into_iter() {
-                let book = item.as_mut().unwrap();
-                let wrapped_sheet = Sheet::new(book, &user_entered_sh_name);
+            for item in books_vec.into_iter() {
+                let book = match item {
+                    Ok(x) => x,
+                    Err(err) => {
+                        display_error_and_wait(err);
+                        continue 'main_loop;
+                    }
+                };
 
-                let sheet = match wrapped_sheet {
+                let sheet = match Sheet::new(book, &user_entered_sh_name) {
                     Ok(x) => x,
                     Err(err) => {
                         display_error_and_wait(err);
@@ -120,25 +123,33 @@ fn main() {
             temp_acts_vec
         };
 
-        ui::display_formatted_text("Идет построение структуры excel-отчета в зависимости от содержания итогов актов, ожидайте...", None);
+        ui::display_formatted_text("Идет вычисление структуры excel-отчета в зависимости от содержания итогов актов, ожидайте...", None);
 
-        // "При вызове new() для Report требуется передать вектор актов. Это связанно с тем, что xlsxwriter
-        // не умеет вставлять столбцы и не сможет переносить то, что им уже записано (не умеет читать Excel),
-        // что предполагает необходимость установить общее количество столбцов, и их порядок до того как начнется запись актов.
-        // Получается, на протяжении работы программы в Report
-        // акты передаются дважды: при создании формы отчета для создания выборки всех названий, что встречаются в итогах,
+        // "При вызове new() для Report требуется вектор актов. Это связанно с тем, что xlsxwriter
+        // не может вставлять столбцы и не сможет переносить то, что им уже записано (т.к. не умеет читать Excel),
+        // что предполагает необходимость установить общее количество столбцов, и их порядок до того как начнется запись.
+        // Получается, на протяжении работы программы в Report акты передаются дважды:
+        // при создании формы отчета для создания выборки всех названий, что встречаются в итогах,
         // а второй раз акт в Report будет передан циклом записи."
 
-        let mut report = Report::new(&report_path, &acts_vec).unwrap();
+        let wrappedreport = Report::new(&report_path, &acts_vec);
+        let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что идет вычисление структуры excel-отчета
 
-        let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что идет построение структуры excel-отчета
-        ui::display_formatted_text("Генерируется результирующий Excel-файл, ожидайте...", None);
+        let mut report = match wrappedreport {
+            Ok(rep) => rep,
+            Err(err) => {
+                display_error_and_wait(err);
+                continue 'main_loop;
+            }
+        };
+
+        ui::display_formatted_text("Записывается результирующий Excel-файл, ожидайте...", None);
 
         for act in acts_vec.iter() {
             match report.write(act) {
                 Ok(updated_report) => report = updated_report,
                 Err(err) => {
-                    let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что генерируется Excel
+                    let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что записывается Excel
                     display_error_and_wait(err);
                     continue 'main_loop;
                 }
@@ -148,20 +159,19 @@ fn main() {
         let files_counter = report.body_syze_in_row;
 
         if let Err(err) = report.write_and_close_report(&report_path) {
-            let _ = Term::stdout().clear_last_lines(2); // удаляется что идет построение структуры excel-отчета и про идет запись
+            let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что записывается Excel
             display_error_and_wait(err);
             continue 'main_loop;
         }
 
-        let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что идет запись
+        let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что записывается Excel
         ui::display_formatted_text("\nУспешно выполнено.", Some(&cyan));
 
-        let footer_msg = format!(
-            "Собрано {} файла(ов).\nСоздан файл \"{}\"",
-            files_counter,
-            report_path.display()
-        );
-        ui::display_formatted_text(&footer_msg, None);
+        let base_msg = format!("Собрано {files_counter} файла(ов).");
+        let footer_msg = format!(r#"Создан файл "{}"#, report_path.display());
+        let full_msg = format!("{base_msg}\n{footer_msg}\n");
+
+        ui::display_formatted_text(&full_msg, None);
         thread::sleep(Duration::from_secs(SUCCESS_PAUSE_DURATION));
         continue 'main_loop;
     }

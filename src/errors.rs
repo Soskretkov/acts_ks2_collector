@@ -19,23 +19,28 @@ pub enum Error<'a> {
         tech_descr: String,
     },
 
+    CalamineFileOpen {
+        file_path: PathBuf,
+        err: calamine::XlsxError,
+    },
+
     CalamineSheetOfTheBookIsUndetectable {
-        file_path: &'a PathBuf,
+        file_path: PathBuf,
         sh_name_for_search: &'a str,
         sh_names: Vec<String>,
     },
     CalamineSheetOfTheBookIsUnreadable {
-        file_path: &'a PathBuf,
+        file_path: PathBuf,
         sh_name: String, // нельзя ссылкой - имя листа с учетом регистра определяется внутри функции, где возможна ошибка
         err: calamine::XlsxError,
     },
     EmptySheetRange {
-        file_path: &'a PathBuf,
+        file_path: PathBuf,
         sh_name: String, // нельзя ссылкой - имя листа с учетом регистра определяется внутри функции, где возможна ошибка
     },
     // ShiftedColumnsInHeader(&'a PathBuf),
     SheetNotContainAllNecessaryData {
-        file_path: &'a PathBuf,
+        file_path: PathBuf,
     },
     XlsxwriterWorkbookCreation {
         wb_name: &'a str,
@@ -93,6 +98,17 @@ P.s. Не беспокойтесь обо всех вложенных папка
                 let base_msg = "Переполнение при операции с числами.";
                 let footer_msg = format!("Подробности об ошибке:\n{}", tech_descr);
                 let full_msg = format!("{base_msg}\n\n{footer_msg}");
+                write!(f, "{full_msg}")
+            }
+
+            Self::CalamineFileOpen {
+                file_path,
+                err,
+            } => {
+                let base_msg = format!(r#"Возникла проблема с открытием книги Excel для чтения»."#);
+                let footer_msg = format!("Подробности об ошибке:\n{err}");
+                let path_msg = format!("Файл, вызывающий ошибку:\n{}", file_path.display());
+                let full_msg = format!("{base_msg}\n\n{footer_msg}\n\n{path_msg}");
                 write!(f, "{full_msg}")
             }
 

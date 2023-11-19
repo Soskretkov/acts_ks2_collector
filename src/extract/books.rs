@@ -1,25 +1,32 @@
 use crate::constants::XL_FILE_EXTENSION;
 use crate::errors::Error;
 use crate::ui;
-use calamine::{Xlsx, XlsxError};
+use calamine::Xlsx;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use walkdir::WalkDir;
+
 pub struct Book {
     pub path: PathBuf,
     pub data: Xlsx<BufReader<File>>,
 }
 
 impl Book {
-    pub fn new(path: PathBuf) -> Result<Self, XlsxError> {
-        let data: Xlsx<_> = calamine::open_workbook(&path)?;
+    pub fn new(path: PathBuf) -> Result<Self, Error<'static>> {
+        let data = calamine::open_workbook(&path).map_err(|err| {
+            let path_clone = path.clone();
+            Error::CalamineFileOpen {
+                file_path: path_clone,
+                err,
+            }
+        })?;
         Ok(Book { path, data })
     }
 }
 
 pub struct ExtractedBooks {
-    pub books: Vec<Result<Book, XlsxError>>,
+    pub books: Vec<Result<Book, Error<'static>>>,
     pub file_count_excluded: usize,
 }
 

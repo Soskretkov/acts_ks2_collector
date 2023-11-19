@@ -1,5 +1,5 @@
 use super::books::Book;
-use super::tags::{TagAddressMap, TAG_INFO_ARRAY, TextCmp};
+use super::tags::{TagAddressMap, TextCmp, TAG_INFO_ARRAY};
 use crate::errors::Error;
 use calamine::{DataType, Range, Reader};
 use std::path::PathBuf;
@@ -16,7 +16,7 @@ impl<'a> Sheet {
         // разработчики Calamine делают зачем-то &mut self в функции worksheet_range(&mut self, name: &str),
         // из-за этого workbook приходится держать мутабельным, хотя этот код его менять вовсе не собирается
         // (из-за мутабельности workbook проблема при попытке множественных ссылок: можно только клонировать)
-        workbook: &'a mut Book,
+        mut workbook: Book,
         user_entered_sh_name: &'a str,
     ) -> Result<Sheet, Error<'a>> {
         let entered_sh_name_lowercase = user_entered_sh_name.to_lowercase();
@@ -26,33 +26,43 @@ impl<'a> Sheet {
             .sheet_names()
             .iter()
             .find(|name| name.to_lowercase() == entered_sh_name_lowercase)
-            .ok_or(Error::CalamineSheetOfTheBookIsUndetectable {
-                file_path: &workbook.path,
-                sh_name_for_search: user_entered_sh_name,
-                sh_names: workbook.data.sheet_names().to_owned(),
+            .ok_or({
+                let path_clone = workbook.path.clone();
+                Error::CalamineSheetOfTheBookIsUndetectable {
+                    file_path: path_clone,
+                    sh_name_for_search: user_entered_sh_name,
+                    sh_names: workbook.data.sheet_names().to_owned(),
+                }
             })?
             .clone();
 
         let xl_sheet = workbook
             .data
             .worksheet_range(&sheet_name)
-            .ok_or(Error::CalamineSheetOfTheBookIsUndetectable {
-                file_path: &workbook.path,
-                sh_name_for_search: user_entered_sh_name,
-                sh_names: workbook.data.sheet_names().to_owned(),
+            .ok_or({
+                let path_clone = workbook.path.clone();
+                Error::CalamineSheetOfTheBookIsUndetectable {
+                    file_path: path_clone,
+                    sh_name_for_search: user_entered_sh_name,
+                    sh_names: workbook.data.sheet_names().to_owned(),
+                }
             })?
             .or_else(|error| {
+                let path_clone = workbook.path.clone();
                 Err(Error::CalamineSheetOfTheBookIsUnreadable {
-                    file_path: &workbook.path,
+                    file_path: path_clone,
                     sh_name: sheet_name.to_owned(),
                     err: error,
                 })
             })?;
 
         // при ошибки передается точное имя листа с учетом регистра (не используем ввод пользователя)
-        let sheet_start_coords = xl_sheet.start().ok_or(Error::EmptySheetRange {
-            file_path: &workbook.path,
-            sh_name: sheet_name.to_owned(),
+        let sheet_start_coords = xl_sheet.start().ok_or({
+            let path_clone = workbook.path.clone();
+            Error::EmptySheetRange {
+                file_path: path_clone,
+                sh_name: sheet_name.to_owned(),
+            }
         })?;
 
         let mut tag_address_map = TagAddressMap::new();
@@ -84,7 +94,7 @@ impl<'a> Sheet {
                     } else {
                         tag_info.id.as_str().to_lowercase()
                     };
-        
+
                     match tag_info.look_at {
                         TextCmp::Whole => cell_content == search_content,
                         TextCmp::Part => cell_content.contains(&search_content),
@@ -115,11 +125,12 @@ impl<'a> Sheet {
         tag_address_map
             .get(&validation_tag)
             // нужно подменить штатную ошибку на ошибку валидации
-            .or_else(|_| {
+            .or_else(|_| {{
+                let path_clone = workbook.path.clone();
                 Err(Error::SheetNotContainAllNecessaryData {
-                    file_path: &workbook.path,
+                    file_path: path_clone,
                 })
-            })?;
+            }})?;
 
         let range_start = (sheet_start_coords.0 as usize, sheet_start_coords.1 as usize);
 
