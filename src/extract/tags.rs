@@ -14,6 +14,8 @@ pub enum Row {
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq, Copy)]
 pub enum TagID {
+    Генподрядчик,
+    Субподрядчик,
     Исполнитель,
     Стройка,
     Объект,
@@ -32,6 +34,8 @@ pub enum TagID {
 impl TagID {
     pub fn as_str(&self) -> &'static str {
         match self {
+            TagID::Генподрядчик => "Генподрядчик",
+            TagID::Субподрядчик => "Субподрядчик",
             TagID::Исполнитель => "Исполнитель",
             TagID::Стройка => "Стройка",
             TagID::Объект => "Объект",
@@ -70,7 +74,9 @@ pub struct TagInfo {
 // Перечислены в порядке вхождения на листе Excel при чтении ячеек слева направо и сверху вниз  (вхождение по строкам важно для валидации)
 // Группировка по строке и столбцу потребуется для валидации в будующих версиях программы (не реализовано)
 #[rustfmt::skip]
-pub const TAG_INFO_ARRAY: [TagInfo; 12] = [
+pub const TAG_INFO_ARRAY: [TagInfo; 14] = [
+    TagInfo { id: TagID::Генподрядчик,                       is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
+    TagInfo { id: TagID::Субподрядчик,                       is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
     TagInfo { id: TagID::Исполнитель,                        is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
     TagInfo { id: TagID::Стройка,                            is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
     TagInfo { id: TagID::Объект,                             is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },

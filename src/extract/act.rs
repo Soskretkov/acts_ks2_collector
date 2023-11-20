@@ -1,5 +1,5 @@
 use super::sheet::Sheet;
-use super::tags::{TagAddressMap, TagArrayTools, TagID};
+use super::tags::{TagAddressMap, TagID};
 use crate::errors::Error;
 use crate::types::XlDataType;
 use calamine::DataType;
@@ -17,23 +17,27 @@ pub struct DesiredCell {
 }
 
 // Some смещение безопасно задавать только обязательным тегом
+// порядок внутри массива не имеет значения
 #[rustfmt::skip]
-const DESIRED_CELLS_ARRAY: [DesiredCell; 16] = [
+const DESIRED_CELLS_ARRAY: [DesiredCell; 19] = [
+    DesiredCell{name:"Генподрядчик",                 cell_coords: None},
+    DesiredCell{name:"Субподрядчик",                 cell_coords: None},
     DesiredCell{name:"Исполнитель",                  cell_coords: None},
     DesiredCell{name:"Глава",                        cell_coords: None},
     DesiredCell{name:"Глава наименование",           cell_coords: None},
-    DesiredCell{name:"Объект",                       cell_coords: Some(CellCoords{row: (TagID::Объект, 0), col: (TagID::НаименованиеРаботИЗатрат, 0)})},
-    DesiredCell{name:"Договор №",                    cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 0), col: (TagID::ДоговорПодряда, 2)})},
-    DesiredCell{name:"Договор дата",                 cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 1), col: (TagID::ДоговорПодряда, 2)})},
-    DesiredCell{name:"Смета №",                      cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 0), col: (TagID::Стройка, 0)})},
-    DesiredCell{name:"Смета наименование",           cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 1), col: (TagID::Стройка, 0)})},
-    DesiredCell{name:"По смете в ц.2000г.",          cell_coords: Some(CellCoords{row: (TagID::ДопСоглашение, 0), col: (TagID::НомерДокумента, 0)})},
-    DesiredCell{name:"Выполнение работ в ц.2000г.",  cell_coords: Some(CellCoords{row: (TagID::ДопСоглашение, 1), col: (TagID::НомерДокумента, 0)})},
-    DesiredCell{name:"Акт №",                        cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2), col: (TagID::НомерДокумента, 0)})},
-    DesiredCell{name:"Акт дата",                     cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2), col: (TagID::НомерДокумента, 4)})},
-    DesiredCell{name:"Отчетный период начало",       cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2), col: (TagID::НомерДокумента, 5)})},
-    DesiredCell{name:"Отчетный период окончание",    cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2), col: (TagID::НомерДокумента, 6)})},
-    DesiredCell{name:"Метод расчета",                cell_coords: Some(CellCoords{row: (TagID::НаименованиеРаботИЗатрат, -1), col: (TagID::Стройка, 0)})},
+    DesiredCell{name:"Объект",                       cell_coords: Some(CellCoords{row: (TagID::Объект, 0),                      col: (TagID::НаименованиеРаботИЗатрат, 0)})},
+    DesiredCell{name:"Договор №",                    cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 0),              col: (TagID::ДоговорПодряда, 2)})},
+    DesiredCell{name:"Договор дата",                 cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 1),              col: (TagID::ДоговорПодряда, 2)})},
+    DesiredCell{name:"Смета №",                      cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 0),              col: (TagID::Стройка, 0)})},
+    DesiredCell{name:"Смета наименование",           cell_coords: Some(CellCoords{row: (TagID::ДоговорПодряда, 1),              col: (TagID::Стройка, 0)})},
+    DesiredCell{name:"По смете в ц.2000г.",          cell_coords: Some(CellCoords{row: (TagID::ДопСоглашение, 0),               col: (TagID::НомерДокумента, 0)})},
+    DesiredCell{name:"Выполнение работ в ц.2000г.",  cell_coords: Some(CellCoords{row: (TagID::ДопСоглашение, 1),               col: (TagID::НомерДокумента, 0)})},
+    DesiredCell{name:"Акт №",                        cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2),              col: (TagID::НомерДокумента, 0)})},
+    DesiredCell{name:"Акт дата",                     cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2),              col: (TagID::НомерДокумента, 4)})},
+    DesiredCell{name:"Отчетный период начало",       cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2),              col: (TagID::НомерДокумента, 5)})},
+    DesiredCell{name:"Отчетный период окончание",    cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2),              col: (TagID::НомерДокумента, 6)})},
+    DesiredCell{name:"Акт вид",                      cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 4),              col: (TagID::Стройка, 0)})},
+    DesiredCell{name:"Метод расчета",                cell_coords: Some(CellCoords{row: (TagID::НаименованиеРаботИЗатрат, -1),   col: (TagID::Стройка, 0)})},
     DesiredCell{name:"Затраты труда, чел.-час",      cell_coords: None}, // небезопасно задать как Some, необязательные теги требуют особого подхода
 ];
 
@@ -116,6 +120,14 @@ impl Act {
                 } => Some(calculate_cell_adr_by_coords(tag_address_map, cell_coords_struct)?),
                 // рукав обработывает ячейки, поиск которых основан на необязательных тегах (индивидуальная логика)
                 DesiredCell { name, .. } => match name {
+                    "Генподрядчик" => tag_address_map
+                    .get(&TagID::Генподрядчик)
+                    .ok()
+                    .map(|(row_adr, _)| (*row_adr, naimenov_rabot_i_zatr_adr.1)),
+                    "Субподрядчик" => tag_address_map
+                    .get(&TagID::Субподрядчик)
+                    .ok()
+                    .map(|(row_adr, _)| (*row_adr, naimenov_rabot_i_zatr_adr.1)),
                     "Исполнитель" => tag_address_map
                         .get(&TagID::Исполнитель)
                         .ok()

@@ -90,6 +90,8 @@ fn main() {
             thread::sleep(Duration::from_secs(SUCCESS_PAUSE_DURATION));
             continue 'main_loop;
         }
+        
+        ui::display_formatted_text("\nИдет анализ отобранных excel-файлов, ожидайте...", None);
 
         let acts_vec = {
             let mut temp_acts_vec = Vec::new();
@@ -97,6 +99,7 @@ fn main() {
                 let book = match item {
                     Ok(x) => x,
                     Err(err) => {
+                        let _ = Term::stdout().clear_last_lines(2); // удаляется сообщение что идет анализ excel-файлов
                         display_error_and_wait(err);
                         continue 'main_loop;
                     }
@@ -105,6 +108,7 @@ fn main() {
                 let sheet = match Sheet::new(book, &user_entered_sh_name) {
                     Ok(x) => x,
                     Err(err) => {
+                        let _ = Term::stdout().clear_last_lines(2); // удаляется сообщение что идет анализ excel-файлов
                         display_error_and_wait(err);
                         continue 'main_loop;
                     }
@@ -113,6 +117,7 @@ fn main() {
                 let act = match Act::new(sheet) {
                     Ok(x) => x,
                     Err(err) => {
+                        let _ = Term::stdout().clear_last_lines(2); // удаляется сообщение что идет анализ excel-файлов
                         display_error_and_wait(err);
                         continue 'main_loop;
                     }
@@ -123,7 +128,8 @@ fn main() {
             temp_acts_vec
         };
 
-        ui::display_formatted_text("Идет вычисление структуры excel-отчета в зависимости от содержания итогов актов, ожидайте...", None);
+        let _ = Term::stdout().clear_last_lines(2); // удаляется сообщение что идет анализ excel-файлов
+        ui::display_formatted_text("\nИдет расчет структуры результирующего excel-отчета, ожидайте...", None);
 
         // "При вызове new() для Report требуется вектор актов. Это связанно с тем, что xlsxwriter
         // не может вставлять столбцы и не сможет переносить то, что им уже записано (т.к. не умеет читать Excel),
@@ -133,7 +139,7 @@ fn main() {
         // а второй раз акт в Report будет передан циклом записи."
 
         let wrappedreport = Report::new(&report_path, &acts_vec);
-        let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что идет вычисление структуры excel-отчета
+        let _ = Term::stdout().clear_last_lines(2); // удаляется сообщение что идет вычисление структуры excel-отчета
 
         let mut report = match wrappedreport {
             Ok(rep) => rep,
@@ -143,13 +149,13 @@ fn main() {
             }
         };
 
-        ui::display_formatted_text("Записывается результирующий Excel-файл, ожидайте...", None);
+        ui::display_formatted_text("\nИдет запись результирующего excel-отчета, ожидайте...", None);
 
         for act in acts_vec.iter() {
             match report.write(act) {
                 Ok(updated_report) => report = updated_report,
                 Err(err) => {
-                    let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что записывается Excel
+                    let _ = Term::stdout().clear_last_lines(2); // удаляется сообщение что записывается Excel
                     display_error_and_wait(err);
                     continue 'main_loop;
                 }
@@ -159,16 +165,16 @@ fn main() {
         let files_counter = report.body_syze_in_row;
 
         if let Err(err) = report.write_and_close_report(&report_path) {
-            let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что записывается Excel
+            let _ = Term::stdout().clear_last_lines(2); // удаляется сообщение что записывается Excel
             display_error_and_wait(err);
             continue 'main_loop;
         }
 
-        let _ = Term::stdout().clear_last_lines(1); // удаляется сообщение что записывается Excel
+        let _ = Term::stdout().clear_last_lines(2); // удаляется сообщение что записывается Excel
         ui::display_formatted_text("\nУспешно выполнено.", Some(&cyan));
 
         let base_msg = format!("Собрано {files_counter} файла(ов).");
-        let footer_msg = format!(r#"Создан файл "{}"#, report_path.display());
+        let footer_msg = format!(r#"Создан файл "{}""#, report_path.display());
         let full_msg = format!("{base_msg}\n{footer_msg}\n");
 
         ui::display_formatted_text(&full_msg, None);

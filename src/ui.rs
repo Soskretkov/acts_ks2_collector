@@ -9,7 +9,7 @@ use std::time::Duration; // для засыпания на секунду-две
 
 pub fn user_input() -> Result<(PathBuf, String), Error<'static>> {
     loop {
-        println!("");
+        println!("\n");
         let entered_text = inputting_path();
         let path = PathBuf::from(&entered_text);
 
@@ -24,23 +24,17 @@ pub fn user_input() -> Result<(PathBuf, String), Error<'static>> {
             });
         }
 
-        //filter нужен на случай ввода "details"  в кавычках (@ - на случай русской раскладки)
+        //filter нужен на случай ввода "info"  в кавычках (@ - на случай русской раскладки)
         let keyword = entered_text
             .chars()
             .filter(|ch| *ch != '"' && *ch != '@')
             .collect::<String>()
             .to_lowercase();
-        let len_text = keyword.chars().count();
+        // let len_text = keyword.chars().count();
 
         match keyword {
-            x if len_text < 9
-                && x.matches([
-                    'd', 'e', 't', 'a', 'i', 'l', 's', 'в', 'у', 'е', 'ф', 'ш', 'д', 'ы',
-                ])
-                .count()
-                    > 4 =>
-            {
-                display_details();
+            ch if ch.matches(['i', 'n', 'f', 'o', 'ш', 'т', 'а', 'щ']).count() == 4 => {
+                display_info();
                 thread::sleep(Duration::from_secs(2));
                 continue;
             }
@@ -51,7 +45,7 @@ pub fn user_input() -> Result<(PathBuf, String), Error<'static>> {
 
 pub fn display_first_lines(is_visible: bool) {
     let optional_text = if is_visible {
-        "       Введите  \"details\"  для получения подробностей о программе."
+        "       Для получения подробной информации о программе введите \"info\" вместо пути."
     } else {
         ""
     };
@@ -86,7 +80,7 @@ pub fn display_formatted_text(text: &str, text_style: Option<&Style>) {
     }
 }
 
-fn display_details() {
+fn display_info() {
     // Очистка прошлых сообщений
     let _ = Term::stdout().clear_screen();
     display_first_lines(false);

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use xlsxwriter::{format, worksheet::DateTime, Format, Workbook, Worksheet};
 
-const XL_REPORT_RESULT_SHEET_NAME: &str = "result";
+const XL_REPORT_RESULT_SHEET_NAME: &str = "Лист1";
 const XL_REPORT_START_ROW_OFFSET: u32 = 0;
 const XL_REPORT_HEADER_SIZE_IN_ROW: u32 = 2;
 
@@ -129,15 +129,15 @@ impl ExcelDataSet {
     fn count_col(vector: &[ExtractionConfig]) -> u16 {
         vector
             .iter()
-            .fold(0, |acc, ExtractionConfig| match ExtractionConfig.moving {
-                Moving::No => acc + ExtractionConfig.expected_columns,
-                Moving::Yes => acc + ExtractionConfig.expected_columns,
+            .fold(0, |acc, extraction_config| match extraction_config.moving {
+                Moving::No => acc + extraction_config.expected_columns,
+                Moving::Yes => acc + extraction_config.expected_columns,
                 _ => acc,
             })
     }
 }
 #[test]
-fn ExcelDataSet_test() {
+fn excel_data_set_test() {
     #[rustfmt::skip]
         let vec_to_test = vec![
             ExtractionConfig{rename: None,                           moving: Moving::No,  sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Объект")},
@@ -149,12 +149,12 @@ fn ExcelDataSet_test() {
             ExtractionConfig{rename: Some("УДАЛИТЬ..............."), moving: Moving::Del, sequence_number: 0, expected_columns: 99, source: Source::AtBasePrices("Производство работ в зимнее время 4%".to_string(), Matches::Exact)},
             ExtractionConfig{rename: None,                           moving: Moving::Yes, sequence_number: 0, expected_columns: 8,  source: Source::AtCurrPrices("Стоимость материальных ресурсов (всего)".to_string(), Matches::Exact)},
         ];
-    let ExcelDataSet = ExcelDataSet::new(vec_to_test);
+    let excel_data_set = ExcelDataSet::new(vec_to_test);
 
-    assert_eq!(&29, &ExcelDataSet.get_number_of_columns());
+    assert_eq!(&29, &excel_data_set.get_number_of_columns());
     assert_eq!(
         Some((6, 21)),
-        ExcelDataSet.get_index_and_address_by_columns(
+        excel_data_set.get_index_and_address_by_columns(
             "curr",
             "Стоимость материальных ресурсов (всего)",
             Matches::Exact
@@ -162,7 +162,7 @@ fn ExcelDataSet_test() {
     );
     assert_eq!(
         Some((4, 10)),
-        ExcelDataSet.get_index_and_address_by_columns(
+        excel_data_set.get_index_and_address_by_columns(
             "curr",
             "Накладные расходы",
             Matches::Contains
@@ -184,8 +184,11 @@ impl<'a> WritingConfigs {
         let main_cfg: Vec<ExtractionConfig> = vec![
             ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Папка (ссылка)")},
             ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Файл (ссылка)")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Акт вид")},
             ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Акт №")},
             ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Акт дата")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Генподрядчик")},
+            ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Субподрядчик")},
             ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Исполнитель")},
             ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::Calculate("Глава")},
             ExtractionConfig{rename: None,                                        moving: Moving::No, sequence_number: 0, expected_columns: 1,  source: Source::InTableHeader("Объект")},
@@ -283,15 +286,15 @@ impl<'a> WritingConfigs {
     ) -> (Vec<ExtractionConfig>, Vec<ExtractionConfig>) {
         let exclude_from_base = part_1
             .iter()
-            .filter(|ExtractionConfig| {
-                matches!(ExtractionConfig.source, Source::AtBasePrices(_, _))
+            .filter(|extraction_config| {
+                matches!(extraction_config.source, Source::AtBasePrices(_, _))
             })
             .collect::<Vec<_>>();
 
         let exclude_from_curr = part_1
             .iter()
-            .filter(|ExtractionConfig| {
-                matches!(ExtractionConfig.source, Source::AtCurrPrices(_, _))
+            .filter(|extraction_config| {
+                matches!(extraction_config.source, Source::AtCurrPrices(_, _))
             })
             .collect::<Vec<_>>();
 
@@ -414,7 +417,7 @@ impl<'a> Report {
         })?;
 
         // создание пустого листа для записи результата
-        let mut sheet = &mut wb
+        let _ = &mut wb
             .add_worksheet(Some(XL_REPORT_RESULT_SHEET_NAME))
             .or_else(|_| Err(Error::XlsxwriterSheetCreationFailed))?;
 
@@ -467,9 +470,10 @@ impl<'a> Report {
                     .names_of_header
                     .iter()
                     .position(|desired_data| desired_data.name == name)
-                    .unwrap(); //.unwrap_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
-                let XlDataType = &act.data_of_header[index];
+                    .unwrap();
+                let xl_data_type = &act.data_of_header[index];
 
+                // все возможные варианты с датами
                 let date_list = [
                     "Договор дата",
                     "Акт дата",
@@ -483,7 +487,7 @@ impl<'a> Report {
                     Some(&fmt_num)
                 };
 
-                match XlDataType {
+                match xl_data_type {
                     Some(XlDataType::String(text)) if name_is_date => {
                         let re = Regex::new(r"^\d{2}.\d{2}.\d{4}$").unwrap();
                         if re.is_match(text) {
@@ -508,6 +512,19 @@ impl<'a> Report {
             }
             if let Source::Calculate(name) = item.source {
                 match name {
+                    "Папка (ссылка)" => {
+                        if let Some(file_name) = act.path.split('\\').last() {
+                            let folder_path = act.path.replace(file_name, "");
+                            sh.write_url(row, column, &folder_path, None);
+                        };
+                    }
+                    "Файл (ссылка)" => {
+                        if let Some(file_name) = act.path.split('\\').last() {
+                            let formula =
+                                format!("=HYPERLINK(\"{}\", \"{}\")", act.path, file_name);
+                            write_formula(&mut sh, row, column, &formula, Some(&fmt_url))?;
+                        };
+                    }
                     "Глава" => loop {
                         let index_1 = act
                             .names_of_header
@@ -519,15 +536,15 @@ impl<'a> Report {
                             .iter()
                             .position(|desired_data| desired_data.name == "Глава наименование")
                             .unwrap(); //_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
-                        let XlDataType_1 = &act.data_of_header[index_1];
-                        let XlDataType_2 = &act.data_of_header[index_2];
+                        let xl_data_type_1 = &act.data_of_header[index_1];
+                        let xl_data_type_2 = &act.data_of_header[index_2];
 
-                        let temp_res_1 = match XlDataType_1 {
+                        let temp_res_1 = match xl_data_type_1 {
                             Some(XlDataType::String(word)) if !word.is_empty() => word,
                             _ => break,
                         };
 
-                        let temp_res_2 = match XlDataType_2 {
+                        let temp_res_2 = match xl_data_type_2 {
                             Some(XlDataType::String(word)) if !word.is_empty() => word,
                             _ => break,
                         };
@@ -542,26 +559,11 @@ impl<'a> Report {
                             .iter()
                             .position(|desired_data| desired_data.name == name)
                             .unwrap(); //_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
-                        let XlDataType = &act.data_of_header[index];
+                        let xl_data_type = &act.data_of_header[index];
 
-                        if let Some(XlDataType::String(txt)) = XlDataType {
+                        if let Some(XlDataType::String(txt)) = xl_data_type {
                             let text = txt.trim_start_matches("Смета № ");
                             write_string(&mut sh, row, column, text, None);
-                        }
-                    }
-                    "Акт №" => {
-                        let index = act
-                            .names_of_header
-                            .iter()
-                            .position(|desired_data| desired_data.name == name)
-                            .unwrap(); //_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
-                        let XlDataType = &act.data_of_header[index];
-
-                        if let Some(XlDataType::String(text)) = XlDataType {
-                            // if text.matches(['/']).count() == 3 {
-                            //    let text = &text.chars().take_while(|ch| *ch != '/').collect::<String>();
-                            write_string(&mut sh, row, column, text, None)?;
-                            // }
                         }
                     }
                     "По смете в ц.2000г." | "Выполнение работ в ц.2000г." =>
@@ -571,9 +573,9 @@ impl<'a> Report {
                             .iter()
                             .position(|desired_data| desired_data.name == name)
                             .unwrap(); //_or(return Err(format!("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"{}\" обязательно должен быть перечислен в DESIRED_DATA_ARRAY", name)));
-                        let XlDataType = &act.data_of_header[index];
+                        let xl_data_type = &act.data_of_header[index];
 
-                        if let Some(XlDataType::String(text)) = XlDataType {
+                        if let Some(XlDataType::String(text)) = xl_data_type {
                             let _ = text
                                 .replace("тыс.", "")
                                 .replace("руб.", "")
@@ -592,18 +594,33 @@ impl<'a> Report {
                                 .unwrap();
                         }
                     }
-                    "Папка (ссылка)" => {
-                        if let Some(file_name) = act.path.split('\\').last() {
-                            let folder_path = act.path.replace(file_name, "");
-                            sh.write_url(row, column, &folder_path, None);
-                        };
+                    "Акт №" => {
+                        let index = act
+                            .names_of_header
+                            .iter()
+                            .position(|desired_data| desired_data.name == name)
+                            .unwrap();
+                        let xl_data_type = &act.data_of_header[index];
+
+                        if let Some(XlDataType::String(text)) = xl_data_type {
+                            // if text.matches(['/']).count() == 3 {
+                            //    let text = &text.chars().take_while(|ch| *ch != '/').collect::<String>();
+                            write_string(&mut sh, row, column, text, None)?;
+                            // }
+                        }
                     }
-                    "Файл (ссылка)" => {
-                        if let Some(file_name) = act.path.split('\\').last() {
-                            let formula =
-                                format!("=HYPERLINK(\"{}\", \"{}\")", act.path, file_name);
-                            write_formula(&mut sh, row, column, &formula, Some(&fmt_url))?;
-                        };
+                    "Акт вид" => {
+                        let index = act
+                            .names_of_header
+                            .iter()
+                            .position(|desired_data| desired_data.name == name)
+                            .unwrap();
+                        let xl_data_type = &act.data_of_header[index];
+
+                        if let Some(XlDataType::String(text)) = xl_data_type {
+                            let new_text = text.to_lowercase();
+                            write_string(&mut sh, row, column, &new_text, None)?;
+                        }
                     }
                     _ => unreachable!("Данные не предусмотренные к записи (не покрыты match)"),
                 }
@@ -768,20 +785,20 @@ impl<'a> Report {
         ];
 
         let mut counter = 0;
-        for ExtractionConfig in header_name.iter() {
-            let prefix = match ExtractionConfig.source {
+        for extraction_config in header_name.iter() {
+            let prefix = match extraction_config.source {
                 Source::AtBasePrices(_, _) => Some("БЦ"),
                 Source::AtCurrPrices(_, _) => Some("TЦ"),
                 _ => None,
             };
-            let name = match &ExtractionConfig.source {
+            let name = match &extraction_config.source {
                 Source::InTableHeader(x) => x,
                 Source::Calculate(x) => x,
                 Source::AtBasePrices(x, _) => &x[..],
                 Source::AtCurrPrices(x, _) => &x[..],
             };
 
-            let renaming_name = match ExtractionConfig.rename {
+            let renaming_name = match extraction_config.rename {
                 Some(x) => x,
                 _ => name,
             }
@@ -796,7 +813,7 @@ impl<'a> Report {
                 renaming_name
             };
 
-            for exp_col in 0..ExtractionConfig.expected_columns {
+            for exp_col in 0..extraction_config.expected_columns {
                 let col = counter + exp_col;
                 write_string(&mut sh, header_row, col, &new_name, Some(&fmt_header))?;
 
@@ -818,7 +835,7 @@ impl<'a> Report {
 
                 sh.set_column(col, col, width, None);
             }
-            counter += ExtractionConfig.expected_columns;
+            counter += extraction_config.expected_columns;
         }
 
         let last_row =
@@ -837,7 +854,7 @@ impl<'a> Report {
 
         // Вставка формулы с подсчетом количества строк по excel-таблице
         let (_, column_sbt_103) = main_set
-            .get_index_and_address_by_columns("calc", "Акт №", Matches::Exact)
+            .get_index_and_address_by_columns("calc", "Файл (ссылка)", Matches::Exact)
             .unwrap();
         let col_prefix = column_written_with_letters(column_sbt_103);
 
