@@ -2,19 +2,20 @@
 name = "ks2_etl"
 version = "1.2.0"
 edition = "2021"
+rust-version = "1.74.0"
 build = "build.rs"
 
 [build-dependencies]
-winres = "*"
+winres = "0.1.12"
 
 [dependencies]
-calamine = "*"
-xlsxwriter = "*"
-console = "*"
-itertools = "*"
-regex = "*" #используется в load.rs
-walkdir = "*"
-dialoguer = "*"
+calamine = "0.22.1"
+xlsxwriter = "0.6.0"
+console = "0.15.7"
+itertools = "0.12.0"
+regex = "1.10.2" #используется в load.rs
+walkdir = "2.4.0"
+dialoguer = "0.11.0"
 
 [profile.release]
 opt-level = 3
