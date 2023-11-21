@@ -1,5 +1,5 @@
 use super::books::Book;
-use super::tags::{TagAddressMap, TextCmp, TAG_INFO_ARRAY};
+use super::tags::{Column, Row, TagAddressMap, TagID, TextCmp, TAG_INFO_ARRAY};
 use crate::errors::Error;
 use calamine::{DataType, Range, Reader};
 use std::path::PathBuf;
@@ -13,9 +13,9 @@ pub struct Sheet {
 
 impl<'a> Sheet {
     pub fn new(
-        // разработчики Calamine делают зачем-то &mut self в функции worksheet_range(&mut self, name: &str),
-        // из-за этого workbook приходится держать мутабельным, хотя этот код его менять вовсе не собирается
-        // (из-за мутабельности workbook проблема при попытке множественных ссылок: можно только клонировать)
+        // разработчики Calamine зачем-то требуют передать &mut в функцию worksheet_range(&mut self, name: &str),
+        // из-за этого workbook приходится держать мутабельным, хотя этот код его менять не собирается
+        // (это создает ряд проблем, в частности из-за мутабельности workbook приходится чаще клонировать)
         mut workbook: Book,
         user_entered_sh_name: &'a str,
     ) -> Result<Sheet, Error<'a>> {
@@ -125,21 +125,169 @@ impl<'a> Sheet {
         tag_address_map
             .get(&validation_tag)
             // нужно подменить штатную ошибку на ошибку валидации
-            .or_else(|_| {{
+            .or_else(|_| {
                 let path_clone = workbook.path.clone();
                 Err(Error::SheetNotContainAllNecessaryData {
                     file_path: path_clone,
                 })
-            }})?;
+            })?;
 
         let range_start = (sheet_start_coords.0 as usize, sheet_start_coords.1 as usize);
 
-        Ok(Sheet {
+        let result = Sheet {
             path: workbook.path.clone(),
             sheet_name,
             data: xl_sheet,
             tag_address_map,
             range_start,
-        })
+        };
+
+        check_row_type_alignment(&result)?;
+        check_col_type_alignment(&result)?;
+
+        Ok(result)
+    }
+}
+
+fn check_row_type_alignment(sheet: &Sheet) -> Result<(), Error<'static>> {
+    let mut valid_header_adr: Option<(usize, usize)> = None;
+    let mut valid_header_tag_id: Option<TagID> = None;
+
+    let filterd_tag_infos = TAG_INFO_ARRAY
+        .into_iter()
+        .filter(|tag_info| tag_info.group_by_row.is_some());
+
+    for tag_info in filterd_tag_infos {
+        let tag_adr = match sheet.tag_address_map.get(&tag_info.id) {
+            Ok(adr) => adr,
+            Err(err) => {
+                if tag_info.is_required {
+                    return Err(err);
+                } else {
+                    continue;
+                }
+            }
+        };
+
+        if let Some(group_name) = tag_info.group_by_row {
+            // для устойчивости кода проверка сразу обоих на None
+            if valid_header_adr.is_none() && valid_header_tag_id.is_none() {
+                valid_header_adr = Some(*tag_adr);
+                valid_header_tag_id = Some(tag_info.id);
+                continue;
+            }
+
+            match group_name {
+                Row::TableHeader => {
+                    if valid_header_adr.map(|adr| adr.0) != Some(tag_adr.0) {
+                        return Err(pack_into_error(
+                            sheet,
+                            valid_header_tag_id,
+                            tag_info.id,
+                            true,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn check_col_type_alignment(sheet: &Sheet) -> Result<(), Error<'static>> {
+    let mut valid_initial_adr: Option<(usize, usize)> = None;
+    let mut valid_initial_tag_id: Option<TagID> = None;
+    let mut valid_contract_adr: Option<(usize, usize)> = None;
+    let mut valid_contract_tag_id: Option<TagID> = None;
+
+    let filterd_tag_infos = TAG_INFO_ARRAY
+        .into_iter()
+        .filter(|tag_info| tag_info.group_by_col.is_some());
+
+    for tag_info in filterd_tag_infos {
+        let tag_adr = match sheet.tag_address_map.get(&tag_info.id) {
+            Ok(adr) => adr,
+            Err(err) => {
+                if tag_info.is_required {
+                    return Err(err);
+                } else {
+                    continue;
+                }
+            }
+        };
+
+        if let Some(group_name) = tag_info.group_by_col {
+            match group_name {
+                Column::Initial => {
+                    if valid_initial_adr.is_none() && valid_initial_tag_id.is_none() {
+                        valid_initial_adr = Some(*tag_adr);
+                        valid_initial_tag_id = Some(tag_info.id);
+                        continue;
+                    }
+
+                    if valid_initial_adr.map(|adr| adr.1) != Some(tag_adr.1) {
+                        return Err(pack_into_error(
+                            sheet,
+                            valid_initial_tag_id,
+                            tag_info.id,
+                            true,
+                        ));
+                    }
+                },
+                Column::Contract => {
+                    if valid_contract_adr.is_none() && valid_contract_tag_id.is_none() {
+                        valid_contract_adr = Some(*tag_adr);
+                        valid_contract_tag_id = Some(tag_info.id);
+                        continue;
+                    }
+
+                    if valid_contract_adr.map(|adr| adr.1) != Some(tag_adr.1) {
+                        return Err(pack_into_error(
+                            sheet,
+                            valid_contract_tag_id,
+                            tag_info.id,
+                            false,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn pack_into_error(
+    sheet: &Sheet,
+    wrapped_first_tag: Option<TagID>,
+    second_tag: TagID,
+    is_row_alignment_check: bool,
+) -> Error<'static> {
+    let first_tag = match wrapped_first_tag {
+        Some(tag) => tag,
+        None => return Error::InternalLogic {
+            tech_descr: "Отсутствует идентификатор тега для валидации смещения столбцов и строк в акте КС-2. Ожидалось, что идентификатор будет обязательно установлен в процессе валидации документа.".to_string(),
+            err: None,
+        },
+    };
+
+    let first_tag_adr_on_sheet = match sheet.tag_address_map.get(&first_tag) {
+        Ok(adr) => (adr.0 + sheet.range_start.0 + 1, adr.1 + sheet.range_start.1 + 1),
+        Err(err) => return err,
+    };
+
+    let second_tag_adr_on_sheet = match sheet.tag_address_map.get(&second_tag) {
+        Ok(adr) => (adr.0 + sheet.range_start.0 + 1, adr.1 + sheet.range_start.1 + 1),
+        Err(err) => return err,
+    };
+
+    Error::SheetMisalignment {
+        is_row_alignment_check,
+        first_tag_str: first_tag.as_str(),
+        first_tag_adr_on_sheet,
+        second_tag_str: second_tag.as_str(),
+        second_tag_adr_on_sheet,
+        file_path: sheet.path.clone(),
     }
 }

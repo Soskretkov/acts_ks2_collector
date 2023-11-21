@@ -53,7 +53,6 @@ impl TagID {
 }
 
 // режим сравнения двух текстов: частичное или полное совпадение
-#[derive(Clone, Copy)]
 pub enum TextCmp {
     Part,
     Whole,
@@ -61,7 +60,6 @@ pub enum TextCmp {
     EndsWith,
 }
 
-#[derive(Clone, Copy)]
 pub struct TagInfo {
     pub id: TagID,
     pub is_required: bool,
@@ -73,6 +71,7 @@ pub struct TagInfo {
 
 // Перечислены в порядке вхождения на листе Excel при чтении ячеек слева направо и сверху вниз  (вхождение по строкам важно для валидации)
 // Группировка по строке и столбцу потребуется для валидации в будующих версиях программы (не реализовано)
+// При изменении придется попрабивить display для типа Error::SheetNotContainAllNecessaryData
 #[rustfmt::skip]
 pub const TAG_INFO_ARRAY: [TagInfo; 14] = [
     TagInfo { id: TagID::Генподрядчик,                       is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
@@ -91,22 +90,22 @@ pub const TAG_INFO_ARRAY: [TagInfo; 14] = [
     TagInfo { id: TagID::СтоимостьМатериальныхРесурсовВсего, is_required: true,  group_by_row: None,                   group_by_col: None,                   look_at: TextCmp::Whole,      match_case: true },
 ];
 
-pub struct TagArrayTools;
+// pub struct TagArrayTools;
 
-impl TagArrayTools {
-    pub fn _get_tags() -> &'static [TagInfo] {
-        &TAG_INFO_ARRAY
-    }
-    pub fn get_tag_info_by_id(id: TagID) -> Result<TagInfo, Error<'static>> {
-        TAG_INFO_ARRAY
-            .into_iter()
-            .find(|tag_info| tag_info.id == id)
-            .ok_or_else(|| Error::InternalLogic {
-                tech_descr: format!(r#"Массив тегов не содержит тег "{}""#, id.as_str()),
-                err: None,
-            })
-    }
-}
+// impl TagArrayTools {
+//     pub fn _get_tags() -> &'static [TagInfo] {
+//         &TAG_INFO_ARRAY
+//     }
+//     pub fn get_tag_info_by_id(id: TagID) -> Result<TagInfo, Error<'static>> {
+//         TAG_INFO_ARRAY
+//             .into_iter()
+//             .find(|tag_info| tag_info.id == id)
+//             .ok_or_else(|| Error::InternalLogic {
+//                 tech_descr: format!(r#"Массив тегов не содержит тег "{}""#, id.as_str()),
+//                 err: None,
+//             })
+//     }
+// }
 
 // Это обертка над хешкартой, нужна чтобы централизовать обработку ошибок.
 // В противном случае каждая попытка прочитать данные из Hmap потребует индивидуальный unwrap с конвертацией в ошибку
