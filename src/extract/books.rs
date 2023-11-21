@@ -61,14 +61,12 @@ impl ExtractedBooks {
                 })?
                 .to_string_lossy();
 
-            if path.is_dir() {
-                if file_checked_path.contains('@') {
-                    file_count_excluded += 1;
-                    continue;
-                }
+            if path.is_dir() && file_checked_path.contains('@') {
+                file_count_excluded += 1;
+                continue;
             }
 
-            if xl_files_vec.len() == 0 {
+            if xl_files_vec.is_empty() {
                 ui::display_formatted_text("\nОтбранны файлы:", None);
             }
 

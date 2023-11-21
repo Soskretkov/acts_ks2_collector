@@ -15,7 +15,7 @@ pub enum Error<'a> {
         tech_descr: String,
         err: Box<dyn std::error::Error>,
     },
-    NumericOverflowError {
+    NumericOverflow {
         tech_descr: String,
     },
 
@@ -105,7 +105,7 @@ P.s. Не беспокойтесь обо всех вложенных папка
                 write!(f, "{full_msg}")
             }
 
-            Self::NumericOverflowError { tech_descr } => {
+            Self::NumericOverflow { tech_descr } => {
                 let base_msg = "Переполнение при операции с числами.";
                 let footer_msg = format!("Подробности об ошибке:\n{}", tech_descr);
                 let full_msg = format!("{base_msg}\n\n{footer_msg}");

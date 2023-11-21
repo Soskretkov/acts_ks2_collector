@@ -47,13 +47,13 @@ impl<'a> Sheet {
                     sh_names: workbook.data.sheet_names().to_owned(),
                 }
             })?
-            .or_else(|error| {
+            .map_err(|error| {
                 let path_clone = workbook.path.clone();
-                Err(Error::CalamineSheetOfTheBookIsUnreadable {
+                Error::CalamineSheetOfTheBookIsUnreadable {
                     file_path: path_clone,
                     sh_name: sheet_name.to_owned(),
                     err: error,
-                })
+                }
             })?;
 
         // при ошибки передается точное имя листа с учетом регистра (не используем ввод пользователя)
@@ -125,11 +125,11 @@ impl<'a> Sheet {
         tag_address_map
             .get(&validation_tag)
             // нужно подменить штатную ошибку на ошибку валидации
-            .or_else(|_| {
+            .map_err(|_| {
                 let path_clone = workbook.path.clone();
-                Err(Error::SheetNotContainAllNecessaryData {
+                Error::SheetNotContainAllNecessaryData {
                     file_path: path_clone,
-                })
+                }
             })?;
 
         let range_start = (sheet_start_coords.0 as usize, sheet_start_coords.1 as usize);

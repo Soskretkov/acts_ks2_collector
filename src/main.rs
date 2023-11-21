@@ -43,7 +43,7 @@ fn main() {
 
         let report_path = path::PathBuf::from(string_report_path);
 
-        let wraped_books_vec = ExtractedBooks::new(&path).and_then(|extracted_xl_books| {
+        let wraped_books_vec = ExtractedBooks::new(&path).map(|extracted_xl_books| {
             if path.is_dir() {
                 let file_count_total =
                     extracted_xl_books.books.len() + extracted_xl_books.file_count_excluded;
@@ -74,7 +74,7 @@ fn main() {
                 ui::display_formatted_text(&full_msg, None);
             }
 
-            Ok(extracted_xl_books.books)
+            extracted_xl_books.books
         });
 
         let books_vec = match wraped_books_vec {
@@ -85,7 +85,7 @@ fn main() {
             }
         };
 
-        if books_vec.len() == 0 {
+        if books_vec.is_empty() {
             ui::display_formatted_text("Нет файлов к сбору.", Some(&red));
             thread::sleep(Duration::from_secs(SUCCESS_PAUSE_DURATION));
             continue 'main_loop;

@@ -4,7 +4,7 @@ use crate::types::XlDataType;
 use itertools::Itertools;
 use regex::Regex;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 use xlsxwriter::{format, worksheet::DateTime, Format, Workbook, Worksheet};
 
 const XL_REPORT_RESULT_SHEET_NAME: &str = "Лист1";
@@ -407,18 +407,18 @@ pub struct Report {
 }
 
 impl<'a> Report {
-    pub fn new(filepath: &'a PathBuf, acts_vec: &[Act]) -> Result<Report, Error<'a>> {
+    pub fn new(filepath: &'a Path, acts_vec: &[Act]) -> Result<Report, Error<'a>> {
         let file_stem_string = filepath.file_stem().unwrap().to_str().unwrap();
-        let wb = Workbook::new(&filepath.display().to_string()).or_else(|error| {
-            Err(Error::XlsxwriterWorkbookCreation {
+        let wb = Workbook::new(&filepath.display().to_string()).map_err(|error| {
+            Error::XlsxwriterWorkbookCreation {
                 wb_name: file_stem_string,
                 err: error,
-            })
+            }
         })?;
 
         // создание пустого листа для записи результата
         wb.add_worksheet(Some(XL_REPORT_RESULT_SHEET_NAME))
-            .or_else(|_| Err(Error::XlsxwriterSheetCreation))?;
+            .map_err(|_| Error::XlsxwriterSheetCreation)?;
 
         let writing_configs = WritingConfigs::new(acts_vec)?;
 
@@ -498,7 +498,7 @@ impl<'a> Report {
                             let datetime = DateTime::new(year, month, day, 0, 0, 0.0);
 
                             sh.write_datetime(row, column, &datetime, format)
-                                .or_else(|error| Err(Error::XlsxwriterCellWrite(error)))?;
+                                .map_err(Error::XlsxwriterCellWrite)?;
                         }
                     }
                     Some(XlDataType::String(text)) => {
@@ -516,7 +516,7 @@ impl<'a> Report {
                         if let Some(file_name) = act.path.split('\\').last() {
                             let folder_path = act.path.replace(file_name, "");
                             sh.write_url(row, column, &folder_path, None)
-                                .or_else(|error| Err(Error::XlsxwriterCellWrite(error)))?;
+                                .map_err(Error::XlsxwriterCellWrite)?;
                         };
                     }
                     "Файл (ссылка)" => {
@@ -526,34 +526,30 @@ impl<'a> Report {
                             write_formula(&mut sh, row, column, &formula, Some(&fmt_url))?;
                         };
                     }
-                    "Глава" => loop {
+                    "Глава" => {
                         let index_1 = act
                             .names_of_header
                             .iter()
                             .position(|desired_data| desired_data.name == "Глава")
                             .unwrap(); //_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
+                        
                         let index_2 = act
                             .names_of_header
                             .iter()
                             .position(|desired_data| desired_data.name == "Глава наименование")
                             .unwrap(); //_or(return Err("Ошибка в логике программы, сообщающая о необходимости исправления программного кода: \"Глава наименование\" обязательно должна быть в DESIRED_DATA_ARRAY".to_owned()));
-                        let xl_data_type_1 = &act.data_of_header[index_1];
-                        let xl_data_type_2 = &act.data_of_header[index_2];
-
-                        let temp_res_1 = match xl_data_type_1 {
-                            Some(XlDataType::String(word)) if !word.is_empty() => word,
-                            _ => break,
-                        };
-
-                        let temp_res_2 = match xl_data_type_2 {
-                            Some(XlDataType::String(word)) if !word.is_empty() => word,
-                            _ => break,
-                        };
-
-                        let text = format!("{} «{}»", temp_res_1, temp_res_2);
-                        write_string(&mut sh, row, column, &text, None)?;
-                        break;
-                    },
+                        
+                        if let (
+                            Some(XlDataType::String(temp_res_1)),
+                            Some(XlDataType::String(temp_res_2)),
+                        ) = (&act.data_of_header[index_1], &act.data_of_header[index_2])
+                        {
+                            if !(temp_res_1.is_empty() || temp_res_2.is_empty()) {
+                                let text = format!("{} «{}»", temp_res_1, temp_res_2);
+                                write_string(&mut sh, row, column, &text, None)?;
+                            }
+                        }
+                    }
                     "Смета №" => {
                         let index = act
                             .names_of_header
@@ -715,11 +711,11 @@ impl<'a> Report {
         Ok(self)
     }
 
-    pub fn write_and_close_report(self, filepath: &'a PathBuf) -> Result<(), Error<'a>> {
+    pub fn write_and_close_report(self, filepath: &'a Path) -> Result<(), Error<'a>> {
         let mut sh = self
             .book
             .get_worksheet(XL_REPORT_RESULT_SHEET_NAME)
-            .or_else(|_| Err(Error::XlsxwriterSheetCreation))?
+            .map_err(|_| Error::XlsxwriterSheetCreation)?
             .ok_or_else(|| Error::XlsxwriterSheetCreation)?;
 
         let main_set = &self.writing_configs.main_set;
@@ -828,7 +824,8 @@ impl<'a> Report {
                         20.11
                     };
 
-                sh.set_column(col, col, width, None).or_else(|error| Err(Error::XlsxwriterFormatting(error)))?;
+                sh.set_column(col, col, width, None)
+                    .map_err(Error::XlsxwriterFormatting)?;
             }
             counter += extraction_config.expected_columns;
         }
@@ -841,9 +838,12 @@ impl<'a> Report {
             - 1;
 
         let first_row_tab_body = header_row + 1;
-        sh.set_row(header_row - 1, 29., None).or_else(|error| Err(Error::XlsxwriterFormatting(error)))?;
-        sh.set_row(header_row, 46.5, None).or_else(|error| Err(Error::XlsxwriterFormatting(error)))?;
-        sh.autofilter(header_row, 0, last_row, last_col).or_else(|error| Err(Error::XlsxwriterFormatting(error)))?;
+        sh.set_row(header_row - 1, 29., None)
+            .map_err(Error::XlsxwriterFormatting)?;
+        sh.set_row(header_row, 46.5, None)
+            .map_err(Error::XlsxwriterFormatting)?;
+        sh.autofilter(header_row, 0, last_row, last_col)
+            .map_err(Error::XlsxwriterFormatting)?;
 
         sh.freeze_panes(first_row_tab_body, 0);
 
@@ -890,7 +890,7 @@ impl<'a> Report {
                 });
 
         for i in main_set.get_number_of_columns()..=last_col {
-            col_to_insert_formulas.push(i as u16)
+            col_to_insert_formulas.push(i)
         }
 
         for column_sbt_109 in col_to_insert_formulas {
@@ -922,7 +922,7 @@ fn write_string<'a>(
 ) -> Result<(), Error<'a>> {
     sheet
         .write_string(row, col, text, format)
-        .or_else(|error| Err(Error::XlsxwriterCellWrite(error)))
+        .map_err(Error::XlsxwriterCellWrite)
 }
 
 fn write_number<'a>(
@@ -934,7 +934,7 @@ fn write_number<'a>(
 ) -> Result<(), Error<'a>> {
     sheet
         .write_number(row, col, number, format)
-        .or_else(|error| Err(Error::XlsxwriterCellWrite(error)))
+        .map_err(Error::XlsxwriterCellWrite)
 }
 
 fn write_formula<'a>(
@@ -946,7 +946,7 @@ fn write_formula<'a>(
 ) -> Result<(), Error<'a>> {
     sheet
         .write_formula(row, col, formula, format)
-        .or_else(|error| Err(Error::XlsxwriterCellWrite(error)))
+        .map_err(Error::XlsxwriterCellWrite)
 }
 
 fn column_written_with_letters(column: u16) -> String {

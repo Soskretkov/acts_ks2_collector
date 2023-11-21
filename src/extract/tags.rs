@@ -90,6 +90,7 @@ pub const TAG_INFO_ARRAY: [TagInfo; 14] = [
     TagInfo { id: TagID::СтоимостьМатериальныхРесурсовВсего, is_required: true,  group_by_row: None,                   group_by_col: None,                   look_at: TextCmp::Whole,      match_case: true },
 ];
 
+// (не удалять)
 // pub struct TagArrayTools;
 
 // impl TagArrayTools {

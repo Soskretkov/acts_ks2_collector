@@ -252,7 +252,7 @@ fn calculate_cell_adr_by_coords(
         })
         .and_then(|row: isize| {
             row.checked_add(row_ofst as isize)
-                .ok_or_else(|| Error::NumericOverflowError {
+                .ok_or_else(|| Error::NumericOverflow {
                     tech_descr: format!(
                         "Переполнение при сложении типа isize ({}) с типом isize ({}).",
                         row, row_ofst
@@ -273,7 +273,7 @@ fn calculate_cell_adr_by_coords(
         })
         .and_then(|col: isize| {
             col.checked_add(col_ofst as isize)
-                .ok_or_else(|| Error::NumericOverflowError {
+                .ok_or_else(|| Error::NumericOverflow {
                     tech_descr: format!(
                         "Переполнение при сложении типа isize ({}) с типом isize ({}).",
                         col, col_ofst
@@ -284,6 +284,6 @@ fn calculate_cell_adr_by_coords(
 
     match (row_result, col_result) {
         (Ok(row), Ok(col)) => Ok((row, col)),
-        (Err(e), _) | (_, Err(e)) => return Err(e),
+        (Err(e), _) | (_, Err(e)) => Err(e),
     }
 }
