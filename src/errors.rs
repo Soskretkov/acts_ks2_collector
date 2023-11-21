@@ -56,8 +56,9 @@ pub enum Error<'a> {
         wb_name: &'a str,
         err: xlsxwriter::XlsxError,
     },
-    XlsxwriterSheetCreationFailed,
-    XlsxwriterCellWriteFailed(xlsxwriter::XlsxError),
+    XlsxwriterSheetCreation,
+    XlsxwriterCellWrite(xlsxwriter::XlsxError),
+    XlsxwriterFormatting(xlsxwriter::XlsxError),
     XlsxwriterWorkbookClose {
         wb_name: &'a str,
         err: xlsxwriter::XlsxError,
@@ -238,8 +239,7 @@ P.s. Не беспокойтесь обо всех вложенных папка
 
             Self::XlsxwriterWorkbookCreation { wb_name, err } => {
                 let base_msg = format!(
-                    "Не удалась попытка создания файла Excel с именем '{wb_name}', речь о файле Excel,
-который содержит результат работы программы."
+                    "Не удалась попытка создания файла Excel с именем '{wb_name}'."
                 );
                 let footer_msg = format!("Подробности об ошибке:\n{err}");
 
@@ -247,16 +247,24 @@ P.s. Не беспокойтесь обо всех вложенных папка
                 write!(f, "{full_msg}")
             }
 
-            Self::XlsxwriterSheetCreationFailed => {
-                let msg = "Не удалась попытка создание листа результата внутри нового файла Excel, речь о листе Excel на котором
+            Self::XlsxwriterSheetCreation => {
+                let msg = "Не удалась попытка создание листа результата внутри отчетного файла Excel, речь о листе Excel на котором
 должен был быть записан результат работы программы.";
                 write!(f, "{msg}")
             }
 
-            Self::XlsxwriterCellWriteFailed(err) => {
+            Self::XlsxwriterCellWrite(err) => {
                 let base_msg =
-                    "Не удалась попытка записи данных в ячейку нового файла Excel, того самого,
-который ожидается как результат работы программы.";
+                    "Не удалась попытка записи данных в ячейку отчетного файла Excel.";
+
+                let footer_msg = format!("Подробности об ошибке:\n{err}");
+                let full_msg = format!("{base_msg}\n\n{footer_msg}");
+                write!(f, "{full_msg}")
+            }
+
+            Self::XlsxwriterFormatting(err) => {
+                let base_msg =
+                    "Не удалась попытка форматирования отчетного файла Excel";
 
                 let footer_msg = format!("Подробности об ошибке:\n{err}");
                 let full_msg = format!("{base_msg}\n\n{footer_msg}");

@@ -407,7 +407,7 @@ pub struct Report {
 }
 
 impl<'a> Report {
-    pub fn new(filepath: &'a PathBuf, acts_vec: &[Act]) -> Result<Report, Error<'a>> {    
+    pub fn new(filepath: &'a PathBuf, acts_vec: &[Act]) -> Result<Report, Error<'a>> {
         let file_stem_string = filepath.file_stem().unwrap().to_str().unwrap();
         let wb = Workbook::new(&filepath.display().to_string()).or_else(|error| {
             Err(Error::XlsxwriterWorkbookCreation {
@@ -417,9 +417,8 @@ impl<'a> Report {
         })?;
 
         // создание пустого листа для записи результата
-        let _ = &mut wb
-            .add_worksheet(Some(XL_REPORT_RESULT_SHEET_NAME))
-            .or_else(|_| Err(Error::XlsxwriterSheetCreationFailed))?;
+        wb.add_worksheet(Some(XL_REPORT_RESULT_SHEET_NAME))
+            .or_else(|_| Err(Error::XlsxwriterSheetCreation))?;
 
         let writing_configs = WritingConfigs::new(acts_vec)?;
 
@@ -445,8 +444,8 @@ impl<'a> Report {
             .book
             .get_worksheet(XL_REPORT_RESULT_SHEET_NAME)
             //  map_err не может быть использован шире чем преобразование ошибки и потому более идеоматичен тут чем or_else
-            .map_err(|_| Error::XlsxwriterSheetCreationFailed)?
-            .ok_or(Error::XlsxwriterSheetCreationFailed)?;
+            .map_err(|_| Error::XlsxwriterSheetCreation)?
+            .ok_or(Error::XlsxwriterSheetCreation)?;
 
         let mut fmt_num = self.book.add_format();
         fmt_num.set_num_format(r#"#,##0.00____;-#,##0.00____;"-"____"#);
@@ -498,7 +497,8 @@ impl<'a> Report {
                             let year = date_iterator.next().unwrap();
                             let datetime = DateTime::new(year, month, day, 0, 0, 0.0);
 
-                            sh.write_datetime(row, column, &datetime, format);
+                            sh.write_datetime(row, column, &datetime, format)
+                                .or_else(|error| Err(Error::XlsxwriterCellWrite(error)))?;
                         }
                     }
                     Some(XlDataType::String(text)) => {
@@ -515,7 +515,8 @@ impl<'a> Report {
                     "Папка (ссылка)" => {
                         if let Some(file_name) = act.path.split('\\').last() {
                             let folder_path = act.path.replace(file_name, "");
-                            sh.write_url(row, column, &folder_path, None);
+                            sh.write_url(row, column, &folder_path, None)
+                                .or_else(|error| Err(Error::XlsxwriterCellWrite(error)))?;
                         };
                     }
                     "Файл (ссылка)" => {
@@ -563,7 +564,7 @@ impl<'a> Report {
 
                         if let Some(XlDataType::String(txt)) = xl_data_type {
                             let text = txt.trim_start_matches("Смета № ");
-                            write_string(&mut sh, row, column, text, None);
+                            write_string(&mut sh, row, column, text, None)?;
                         }
                     }
                     "По смете в ц.2000г." | "Выполнение работ в ц.2000г." =>
@@ -576,22 +577,16 @@ impl<'a> Report {
                         let xl_data_type = &act.data_of_header[index];
 
                         if let Some(XlDataType::String(text)) = xl_data_type {
-                            let _ = text
+                            let wrapped_parse_number = text
                                 .replace("тыс.", "")
                                 .replace("руб.", "")
                                 .replace(',', ".")
                                 .replace(' ', "")
-                                .parse::<f64>()
-                                .map(|number| {
-                                    write_number(
-                                        &mut sh,
-                                        row,
-                                        column,
-                                        number * 1000.,
-                                        Some(&fmt_num),
-                                    )
-                                })
-                                .unwrap();
+                                .parse::<f64>();
+
+                            if let Ok(number) = wrapped_parse_number {
+                                write_number(&mut sh, row, column, number * 1000., Some(&fmt_num))?
+                            }
                         }
                     }
                     "Акт №" => {
@@ -635,8 +630,8 @@ impl<'a> Report {
         let mut sh = self
             .book
             .get_worksheet(XL_REPORT_RESULT_SHEET_NAME)
-            .map_err(|_| Error::XlsxwriterSheetCreationFailed)?
-            .ok_or(Error::XlsxwriterSheetCreationFailed)?;
+            .map_err(|_| Error::XlsxwriterSheetCreation)?
+            .ok_or(Error::XlsxwriterSheetCreation)?;
 
         let main_set = &self.writing_configs.main_set;
         let base_set = &self.writing_configs.base_set;
@@ -724,8 +719,8 @@ impl<'a> Report {
         let mut sh = self
             .book
             .get_worksheet(XL_REPORT_RESULT_SHEET_NAME)
-            .or_else(|_| Err(Error::XlsxwriterSheetCreationFailed))?
-            .ok_or_else(|| Error::XlsxwriterSheetCreationFailed)?;
+            .or_else(|_| Err(Error::XlsxwriterSheetCreation))?
+            .ok_or_else(|| Error::XlsxwriterSheetCreation)?;
 
         let main_set = &self.writing_configs.main_set;
         let base_set = &self.writing_configs.base_set;
@@ -734,11 +729,11 @@ impl<'a> Report {
         let header_name: Vec<&ExtractionConfig> = main_set
             .vector
             .iter()
-            .filter(|ExtractionConfig| {
-                ExtractionConfig.moving != Moving::Del
-                    && !(ExtractionConfig.moving == Moving::No
-                        && (matches!(ExtractionConfig.source, Source::AtBasePrices(_, _))
-                            || matches!(ExtractionConfig.source, Source::AtCurrPrices(_, _))))
+            .filter(|extraction_config| {
+                extraction_config.moving != Moving::Del
+                    && !(extraction_config.moving == Moving::No
+                        && (matches!(extraction_config.source, Source::AtBasePrices(_, _))
+                            || matches!(extraction_config.source, Source::AtCurrPrices(_, _))))
             })
             .chain(base_set.vector.iter())
             .chain(curr_set.vector.iter())
@@ -833,7 +828,7 @@ impl<'a> Report {
                         20.11
                     };
 
-                sh.set_column(col, col, width, None);
+                sh.set_column(col, col, width, None).or_else(|error| Err(Error::XlsxwriterFormatting(error)))?;
             }
             counter += extraction_config.expected_columns;
         }
@@ -846,9 +841,9 @@ impl<'a> Report {
             - 1;
 
         let first_row_tab_body = header_row + 1;
-        sh.set_row(header_row - 1, 29., None);
-        sh.set_row(header_row, 46.5, None);
-        sh.autofilter(header_row, 0, last_row, last_col);
+        sh.set_row(header_row - 1, 29., None).or_else(|error| Err(Error::XlsxwriterFormatting(error)))?;
+        sh.set_row(header_row, 46.5, None).or_else(|error| Err(Error::XlsxwriterFormatting(error)))?;
+        sh.autofilter(header_row, 0, last_row, last_col).or_else(|error| Err(Error::XlsxwriterFormatting(error)))?;
 
         sh.freeze_panes(first_row_tab_body, 0);
 
@@ -927,7 +922,7 @@ fn write_string<'a>(
 ) -> Result<(), Error<'a>> {
     sheet
         .write_string(row, col, text, format)
-        .or_else(|error| Err(Error::XlsxwriterCellWriteFailed(error)))
+        .or_else(|error| Err(Error::XlsxwriterCellWrite(error)))
 }
 
 fn write_number<'a>(
@@ -939,7 +934,7 @@ fn write_number<'a>(
 ) -> Result<(), Error<'a>> {
     sheet
         .write_number(row, col, number, format)
-        .or_else(|error| Err(Error::XlsxwriterCellWriteFailed(error)))
+        .or_else(|error| Err(Error::XlsxwriterCellWrite(error)))
 }
 
 fn write_formula<'a>(
@@ -951,7 +946,7 @@ fn write_formula<'a>(
 ) -> Result<(), Error<'a>> {
     sheet
         .write_formula(row, col, formula, format)
-        .or_else(|error| Err(Error::XlsxwriterCellWriteFailed(error)))
+        .or_else(|error| Err(Error::XlsxwriterCellWrite(error)))
 }
 
 fn column_written_with_letters(column: u16) -> String {
