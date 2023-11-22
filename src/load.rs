@@ -1,6 +1,6 @@
 use crate::errors::Error;
 use crate::extract::{Act, TotalsRow};
-use crate::types::XlDataType;
+use crate::shared::{types::XlDataType, utils};
 use itertools::Itertools;
 use regex::Regex;
 use std::collections::HashMap;
@@ -851,7 +851,7 @@ impl<'a> Report {
         let (_, column_sbt_103) = main_set
             .get_index_and_address_by_columns("calc", "Файл (ссылка)", Matches::Exact)
             .unwrap();
-        let col_prefix = column_written_with_letters(column_sbt_103);
+        let col_prefix = utils::get_xl_column_letter(column_sbt_103);
 
         let formula_sbt_103 = format!(
             "=SUBTOTAL(103,{col_prefix}{start}:{col_prefix}{end})&\" шт.\"",
@@ -869,7 +869,7 @@ impl<'a> Report {
 
         // Вставка формул с подсчетом сумм по excel-таблице
         let formula_sbt_109 = |col: u16| {
-            let temp_col_prefix = column_written_with_letters(col);
+            let temp_col_prefix = utils::get_xl_column_letter(col);
             let temp_formula = format!(
                 "=SUBTOTAL(109,{temp_col_prefix}{start}:{temp_col_prefix}{end})",
                 start = first_row_tab_body + 1,
@@ -949,34 +949,6 @@ fn write_formula<'a>(
         .map_err(Error::XlsxwriterCellWrite)
 }
 
-fn column_written_with_letters(column: u16) -> String {
-    let integer = column / 26;
-    let remainder = (column % 26) as u8;
-    let ch = char::from(remainder + 65).to_ascii_uppercase().to_string();
-
-    if integer == 0 {
-        return ch;
-    }
-
-    column_written_with_letters(integer - 1) + &ch
-}
-
 fn variant_eq<T>(first: &T, second: &T) -> bool {
     std::mem::discriminant(first) == std::mem::discriminant(second)
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn column_in_excel_with_letters_01() {
-        use super::column_written_with_letters;
-        let result = column_written_with_letters(886);
-        assert_eq!(result, "AHC".to_string());
-    }
-    #[test]
-    fn column_in_excel_with_letters_02() {
-        use super::column_written_with_letters;
-        let result = column_written_with_letters(1465);
-        assert_eq!(result, "BDJ".to_string());
-    }
 }

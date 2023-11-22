@@ -3,13 +3,12 @@ use std::env;
 use std::path;
 use std::thread; // для засыпания на секунду-две при печати сообщений
 use std::time::Duration; // для засыпания на секунду-две при печати сообщений // имя ".exe" будет присвоено файлу Excel
-mod constants;
+mod shared;
 mod errors;
 mod extract;
 mod load;
-mod types;
 mod ui;
-use crate::constants::{SUCCESS_PAUSE_DURATION, XL_FILE_EXTENSION};
+use crate::shared::constants::{SUCCESS_PAUSE_DURATION, XL_FILE_EXTENSION};
 use crate::errors::Error;
 use crate::extract::Act;
 use crate::extract::{ExtractedBooks, Sheet};

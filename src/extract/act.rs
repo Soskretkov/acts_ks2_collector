@@ -1,7 +1,7 @@
 use super::sheet::Sheet;
 use super::tags::{TagAddressMap, TagID};
 use crate::errors::Error;
-use crate::types::XlDataType;
+use crate::shared::types::XlDataType;
 use calamine::DataType;
 
 #[derive(Debug, Clone)]

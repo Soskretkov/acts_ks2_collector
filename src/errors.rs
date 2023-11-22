@@ -44,11 +44,11 @@ pub enum Error<'a> {
     },
 
     SheetMisalignment {
-        is_row_alignment_check: bool,
-        first_tag_str: &'static str,
-        first_tag_adr_on_sheet: (usize, usize),
-        second_tag_str: &'static str,
-        second_tag_adr_on_sheet: (usize, usize),
+        is_row_algmnt_check: bool,
+        fst_tag_str: &'static str,
+        fst_tag_index_on_sheet: String,
+        snd_tag_str: &'static str,
+        snd_tag_index_on_sheet: String,
         file_path: PathBuf,
     },
 
@@ -89,11 +89,11 @@ impl fmt::Display for Error<'_> {
 Терминал windows (окно которое вы наблюдаете) иногда заменяет его на короткое, что приводит к ошибке.
 Пожалуйста, переименуйте файл или папку, удалив или заменив длинное тире. После повторите попытку.
 
-P.s. Не беспокойтесь обо всех вложенных папках, в которых может встречаться длинное тире,
-программе их наличие не мешает, проблема возникает на этапе когда вы вставляете путь в окно,
-важно чтобы этот путь не исказился и длинное тире автоматически не подменилось на короткое.
+P.s. Не беспокойтесь о вложенных папках, в которых может встречаться длинное тире, программе
+их наличие не мешает, проблема возникает на этапе когда вы вставляете путь в окно,
+важно чтобы этот путь не исказился и длинное тире автоматически не подменилось на короткое
 (попробуйте вставить в это окно любой текст с длинным тире, и вы увидите, что оно автоматически
-меняется, что создает проблему программе принять от вас неискаженный терминалом windows путь)";
+меняется, что создает проблему программе принять от вас неискаженный терминалом windows путь).";
                 let full_msg = format!("{base_msg}\n\n{footer_msg}");
                 write!(f, "{full_msg}")
             }
@@ -154,7 +154,7 @@ P.s. Не беспокойтесь обо всех вложенных папка
 - откройте файл, вызывающий ошибку, и присвойте листу с актом имя, которое затем укажете программе;
 - если не хотите собирать этот файл, переименуйте файл, добавив к существующему имени символ '@',
   или удалите файл из папки;
-- если не хотите собирать папку, где находится файл, добавьте к существующему имени папки символ '@'";
+- если не хотите собирать папку, где находится файл, добавьте к существующему имени папки символ '@'.";
 
                 let path_msg = format!("Файл, вызывающий ошибку:\n{}", file_path.display());
 
@@ -176,7 +176,7 @@ P.s. Не беспокойтесь обо всех вложенных папка
             }
 
             Self::EmptySheetRange { file_path, sh_name } => {
-                let base_msg = format!("Лист '{sh_name}' не содержит данных (пуст)");
+                let base_msg = format!("Лист '{sh_name}' не содержит данных (пуст).");
                 let path_msg = format!("Файл, вызывающий ошибку:\n{}", file_path.display());
                 let full_msg = format!("{base_msg}\n\n{path_msg}");
                 write!(f, "{full_msg}")
@@ -200,38 +200,32 @@ P.s. Не беспокойтесь обо всех вложенных папка
 Проверьте документ на наличие перечисленных ключевых слов. Если ошибка происходит при наличии всех
 ключевых слов - проверьте строковый порядок: вхождение слов по строкам должно быть в порядке
 перечисленом выше (т.е. в файле строка 'Стройка' должна быть выше строки с 'Объект', а 'Объект',
-в свою очередь, расположен выше строки с текстом 'Договор подряда' и так далее).";
+в свою очередь, расположен выше (или левее) строки с текстом 'Договор подряда' и так далее).";
                 let path_msg = format!("Файл, вызывающий ошибку:\n{}", file_path.display());
                 let full_msg = format!("{base_msg}\n\n{path_msg}");
                 write!(f, "{full_msg}")
             }
 
             Self::SheetMisalignment {
-                is_row_alignment_check,
-                first_tag_str,
-                first_tag_adr_on_sheet,
-                second_tag_str,
-                second_tag_adr_on_sheet,
+                is_row_algmnt_check,
+                fst_tag_str,
+                fst_tag_index_on_sheet,
+                snd_tag_str,
+                snd_tag_index_on_sheet,
                 file_path,
             } => {
-                let alignment_type = if *is_row_alignment_check {
+                let alignment_type = if *is_row_algmnt_check {
                     "строке"
                 } else {
                     "колонке"
                 };
 
-                let (xl_first_index, xl_second_index) = if *is_row_alignment_check {
-                    (first_tag_adr_on_sheet.0, second_tag_adr_on_sheet.0)
-                } else {
-                    (first_tag_adr_on_sheet.1, second_tag_adr_on_sheet.1)
-                };
-
                 let base_msg = format!(
-"Ожидалось, что ключевые слова '{first_tag_str}' и '{second_tag_str}'
+"Ожидалось, что ключевые слова '{fst_tag_str}' и '{snd_tag_str}'
 будут оба находиться в одной и той же {alignment_type}.
-Однако, '{first_tag_str}' найдено в {alignment_type} {xl_first_index}, а '{second_tag_str}' — в {alignment_type} {xl_second_index}.
+Однако, '{fst_tag_str}' найдено в {alignment_type} '{fst_tag_index_on_sheet}', а '{snd_tag_str}' — в {alignment_type} '{snd_tag_index_on_sheet}'.
 
-Для исправления ошибки убедитесь, что оба ключевых слова находятся в одной {alignment_type}.");
+Для исправления ошибки разместите оба ключевых слова в одной {alignment_type}.");
 
                 let path_msg = format!("Файл, вызывающий ошибку:\n{}", file_path.display());
                 let full_msg = format!("{base_msg}\n\n{path_msg}");
@@ -277,7 +271,7 @@ P.s. Не беспокойтесь обо всех вложенных папка
                     "Не удалось сохранение на диск файла Excel с именем '{wb_name}', который содержит
 результат работы программы.
                     
-Вероятная причина: не закрыт файл Excel с результатами прошлого сбора."
+Вероятная причина ошибки: не закрыт файл Excel с результатами прошлого сбора."
                 );
                 write!(f, "{msg}")
             }

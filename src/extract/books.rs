@@ -1,4 +1,4 @@
-use crate::constants::XL_FILE_EXTENSION;
+use crate::shared::constants::XL_FILE_EXTENSION;
 use crate::errors::Error;
 use crate::ui;
 use calamine::Xlsx;

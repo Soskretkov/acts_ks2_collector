@@ -1,4 +1,4 @@
-use crate::constants::CONSOLE_LEFT_MARGIN_IN_SPACES;
+use crate::shared::constants::CONSOLE_LEFT_MARGIN_IN_SPACES;
 use crate::errors::Error;
 use console::{Style, Term};
 use dialoguer::Input;
