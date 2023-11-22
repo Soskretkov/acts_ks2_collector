@@ -36,7 +36,7 @@ const DESIRED_CELLS_ARRAY: [DesiredCell; 19] = [
     DesiredCell{name:"Акт дата",                     cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2),              col: (TagID::НомерДокумента, 4)})},
     DesiredCell{name:"Отчетный период начало",       cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2),              col: (TagID::НомерДокумента, 5)})},
     DesiredCell{name:"Отчетный период окончание",    cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 2),              col: (TagID::НомерДокумента, 6)})},
-    DesiredCell{name:"Акт вид",                      cell_coords: Some(CellCoords{row: (TagID::НомерДокумента, 4),              col: (TagID::Стройка, 0)})},
+    DesiredCell{name:"Акт вид",                      cell_coords: Some(CellCoords{row: (TagID::ОПриемкеВыполненныхРабот, -1),   col: (TagID::Стройка, 0)})},
     DesiredCell{name:"Метод расчета",                cell_coords: Some(CellCoords{row: (TagID::НаименованиеРаботИЗатрат, -1),   col: (TagID::Стройка, 0)})},
     DesiredCell{name:"Затраты труда, чел.-час",      cell_coords: None}, // небезопасно задать как Some, необязательные теги требуют особого подхода
 ];

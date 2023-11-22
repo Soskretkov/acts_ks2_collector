@@ -22,6 +22,7 @@ pub enum TagID {
     ДоговорПодряда,
     ДопСоглашение,
     НомерДокумента,
+    ОПриемкеВыполненныхРабот,
     НаименованиеРаботИЗатрат,
     СтоимостьВЦенах2001,
     СтоимостьВТекущихЦенах,
@@ -42,6 +43,7 @@ impl TagID {
             TagID::ДоговорПодряда => "Договор подряда",
             TagID::ДопСоглашение => "Доп. соглашение", // треб. страховать случай "Доп. Соглашение" - Excel автоматически передводит символ после точки в верх. регистр
             TagID::НомерДокумента => "Номер документа",
+            TagID::ОПриемкеВыполненныхРабот => "О ПРИЕМКЕ ВЫПОЛЕНЕННЫХ РАБОТ",
             TagID::НаименованиеРаботИЗатрат => "Наименование работ и затрат",
             TagID::СтоимостьВЦенах2001 => "Стоимость в ценах 2001",
             TagID::СтоимостьВТекущихЦенах => "Стоимость в текущих ценах",
@@ -69,11 +71,10 @@ pub struct TagInfo {
     pub match_case: bool,
 }
 
-// Перечислены в порядке вхождения на листе Excel при чтении ячеек слева направо и сверху вниз  (вхождение по строкам важно для валидации)
-// Группировка по строке и столбцу потребуется для валидации в будующих версиях программы (не реализовано)
-// При изменении придется попрабивить display для типа Error::SheetNotContainAllNecessaryData
+// Перечислены в порядке вхождения на листе Excel при чтении ячеек слева направо и сверху вниз  (важно для валидации)
+// При изменении поправить display для типа Error::SheetNotContainAllNecessaryData
 #[rustfmt::skip]
-pub const TAG_INFO_ARRAY: [TagInfo; 14] = [
+pub const TAG_INFO_ARRAY: [TagInfo; 15] = [
     TagInfo { id: TagID::Генподрядчик,                       is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
     TagInfo { id: TagID::Субподрядчик,                       is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
     TagInfo { id: TagID::Исполнитель,                        is_required: false, group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
@@ -82,6 +83,7 @@ pub const TAG_INFO_ARRAY: [TagInfo; 14] = [
     TagInfo { id: TagID::ДоговорПодряда,                     is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), look_at: TextCmp::Whole,      match_case: true },
     TagInfo { id: TagID::ДопСоглашение,                      is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Contract), look_at: TextCmp::Whole,      match_case: false },
     TagInfo { id: TagID::НомерДокумента,                     is_required: true,  group_by_row: None,                   group_by_col: None,                   look_at: TextCmp::Whole,      match_case: true },
+    TagInfo { id: TagID::ОПриемкеВыполненныхРабот,           is_required: true,  group_by_row: None,                   group_by_col: Some(Column::Initial),  look_at: TextCmp::Whole,      match_case: true },
     TagInfo { id: TagID::НаименованиеРаботИЗатрат,           is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Whole,      match_case: true },
     TagInfo { id: TagID::СтоимостьВЦенах2001,                is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::StartsWith, match_case: true },
     TagInfo { id: TagID::СтоимостьВТекущихЦенах,             is_required: true,  group_by_row: Some(Row::TableHeader), group_by_col: None,                   look_at: TextCmp::Whole,      match_case: true },
